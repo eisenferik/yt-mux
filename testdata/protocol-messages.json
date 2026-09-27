@@ -1,0 +1,110 @@
+{
+  "accepted": [
+    {
+      "name": "settings.get",
+      "message": {
+        "v": 1,
+        "type": "settings.get",
+        "id": "request1"
+      }
+    },
+    {
+      "name": "settings.set",
+      "message": {
+        "v": 1,
+        "type": "settings.set",
+        "id": "request1",
+        "settings": {
+          "destination": "D:\\Videos",
+          "defaultPreset": "archive",
+          "subtitleLanguages": [
+            "ja",
+            "en"
+          ],
+          "cookiesEnabled": true,
+          "notifications": true
+        }
+      }
+    },
+    {
+      "name": "cancel",
+      "message": {
+        "v": 1,
+        "type": "cancel",
+        "id": "request1"
+      }
+    },
+    {
+      "name": "start without cookies",
+      "message": {
+        "v": 1,
+        "type": "start",
+        "id": "request1",
+        "url": "https://www.youtube.com/watch?v=abcdefghijk",
+        "preset": "archive"
+      }
+    },
+    {
+      "name": "start with cookies",
+      "message": {
+        "v": 1,
+        "type": "start",
+        "id": "request1",
+        "url": "https://www.youtube.com/watch?v=abcdefghijk",
+        "preset": "archive",
+        "cookies": [
+          {
+            "domain": ".youtube.com",
+            "name": "SID",
+            "value": "secret",
+            "path": "/",
+            "secure": true
+          },
+          {
+            "domain": ".google.com",
+            "name": "SAPISID",
+            "value": "secret",
+            "path": "/",
+            "secure": true,
+            "httpOnly": true,
+            "expirationDate": 1234567890
+          }
+        ]
+      }
+    },
+    {
+      "name": "destination.pick with a start folder",
+      "message": {
+        "v": 1,
+        "type": "destination.pick",
+        "id": "request1",
+        "start": "D:\\Videos"
+      }
+    },
+    {
+      "name": "destination.pick without a start folder",
+      "message": {
+        "v": 1,
+        "type": "destination.pick",
+        "id": "request1"
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "name": "start carrying downloader arguments",
+      "message": {
+        "v": 1,
+        "type": "start",
+        "id": "request1",
+        "url": "https://www.youtube.com/watch?v=abcdefghijk",
+        "preset": "archive",
+        "args": [
+          "--exec",
+          "bad"
+        ]
+      },
+      "why": "the host must not accept a field it does not define"
+    }
+  ]
+}

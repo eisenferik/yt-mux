@@ -1,0 +1,22 @@
+name: Set up build tools
+description: Set up the pinned Go and Node.js toolchains and install extension dependencies.
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version: '1.27.x'
+        cache-dependency-path: host/go.sum
+
+    - name: Set up Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: '24'
+        cache: npm
+        cache-dependency-path: extension/package-lock.json
+
+    - name: Install extension dependencies
+      shell: pwsh
+      working-directory: extension
+      run: npm ci

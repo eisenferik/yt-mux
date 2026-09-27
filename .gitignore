@@ -1,0 +1,26 @@
+# Go build output
+host/build/
+
+# Extension dependencies and build output
+extension/node_modules/
+extension/dist/
+
+# Release output
+dist/
+
+# Third-party runtime binaries must never be committed or released
+yt-dlp.exe
+ffmpeg.exe
+ffprobe.exe
+deno.exe
+
+# Extension private identity keys must remain outside the repository
+*.pem
+*.key
+*.p12
+
+# Temporary and OS files
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
