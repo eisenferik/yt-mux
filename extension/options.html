@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>yt-mux settings</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main>
+      <header class="app-header">
+        <div class="header-inner">
+          <div class="brand-lockup">
+            <img class="brand-mark" src="icons/icon128.png" alt="">
+            <span class="brand-name">yt-mux</span>
+            <span class="header-rule" aria-hidden="true"></span>
+            <h1>Download settings</h1>
+          </div>
+          <p class="product-principle">yt-mux never re-encodes audio or video.</p>
+        </div>
+      </header>
+
+      <form id="settings-form" class="settings-form">
+        <section class="settings-section" aria-labelledby="save-location-title">
+          <h2 id="save-location-title">Save location</h2>
+          <div class="setting-row field-row">
+            <label class="setting-label" for="destination">Destination folder</label>
+            <div class="path-row">
+              <input id="destination" name="destination" type="text" autocomplete="off" required aria-describedby="destination-hint">
+              <button id="browse-button" class="secondary-button" type="button">Browse</button>
+            </div>
+            <p id="destination-hint" class="field-hint">Choose a folder or enter an absolute Windows path.</p>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="download-format-title">
+          <h2 id="download-format-title">Download format</h2>
+          <div class="setting-row">
+            <label class="setting-label" for="default-preset">Default preset</label>
+            <select id="default-preset" name="defaultPreset">
+              <button type="button"><selectedcontent></selectedcontent></button>
+              <option value="archive">
+                <span class="preset-option">
+                  <span>Archive</span><span class="preset-separator">: </span>
+                  <span class="preset-description">Best available quality, saved as MKV.</span>
+                </span>
+              </option>
+              <option value="archive-vp9">
+                <span class="preset-option">
+                  <span>Archive / VP9</span><span class="preset-separator">: </span>
+                  <span class="preset-description">Prefer VP9 and Opus, saved as MKV.</span>
+                </span>
+              </option>
+              <option value="compat-mp4">
+                <span class="preset-option">
+                  <span>Compatible MP4</span><span class="preset-separator">: </span>
+                  <span class="preset-description">H.264 and AAC only; may be unavailable.</span>
+                </span>
+              </option>
+            </select>
+          </div>
+          <div class="setting-row field-row">
+            <label class="setting-label" for="subtitle-languages">Subtitle languages</label>
+            <input id="subtitle-languages" name="subtitleLanguages" type="text" placeholder="ja, en" required aria-describedby="subtitle-hint">
+            <p id="subtitle-hint" class="field-hint">Separate language codes with commas. Auto-generated subtitles aren't downloaded.</p>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="privacy-feedback-title">
+          <h2 id="privacy-feedback-title">Privacy &amp; feedback</h2>
+          <label class="setting-row toggle-row" for="cookies-enabled">
+            <span id="cookies-label" class="setting-label">Use signed-in YouTube cookies</span>
+            <span class="toggle-control">
+              <input id="cookies-enabled" name="cookiesEnabled" type="checkbox" role="switch" aria-labelledby="cookies-label" aria-describedby="cookies-hint">
+              <small id="cookies-hint">Enable if a video requires sign-in. Downloads use your YouTube sign-in until you turn this off.</small>
+            </span>
+          </label>
+          <label class="setting-row toggle-row" for="notifications">
+            <span id="notifications-label" class="setting-label">Show completion notifications</span>
+            <span class="toggle-control">
+              <input id="notifications" name="notifications" type="checkbox" role="switch" aria-labelledby="notifications-label" aria-describedby="notifications-hint">
+              <small id="notifications-hint">Progress is always shown on the toolbar badge.</small>
+            </span>
+          </label>
+        </section>
+
+        <div class="actions">
+          <button id="save-button" class="primary-button" type="submit">Save settings</button>
+          <p id="status" class="status" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "yt-mux-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome MV3 entry point for yt-mux",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc && node scripts/copy-static.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test \"tests/**/*.test.js\" && node scripts/validate-manifest.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.1.12",
+    "typescript": "5.9.2"
+  }
+}

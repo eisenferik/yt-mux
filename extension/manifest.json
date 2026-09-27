@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "yt-mux",
+  "version": "0.1.0",
+  "description": "Save the active YouTube video without re-encoding its streams.",
+  "minimum_chrome_version": "116",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqTxQn9yp+xVry53hLnMBtlzeudhS5Cd2UMSzg6uIckr1dE4hJO66h/d4HHP2/2WpPx9fnE7kBx3RRRCzaukcEhoGUQP6LYvZT60WZmcR2AiLaBKPH+xtZNKa5XDSen2xM0wzOLJDHls9w3eq1OQjl+babl+pQYrhAMf6A3tePKDOqxVmHA1wKaml9nzO945EKUxOcBPvU//9mYI93z/s3U+T104pE8kqc++h9CQNFkz4zQBmJlT6YLgQBmpVQ+pizZEE2B+YNcOBsZKfZwwTmm6BDNk7fQQ2ZMBclBJonumBka7j9IBg8tfnZlMW5+mpgSuAGYugIJYPd49ua+V9HwIDAQAB",
+  "permissions": [
+    "activeTab",
+    "nativeMessaging",
+    "notifications",
+    "contextMenus"
+  ],
+  "optional_permissions": ["cookies"],
+  "optional_host_permissions": [
+    "https://youtube.com/*",
+    "https://*.youtube.com/*",
+    "https://google.com/*",
+    "https://*.google.com/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Download this video",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "commands": {
+    "download-video": {
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      },
+      "description": "Download the active YouTube video"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "options_page": "options.html"
+}

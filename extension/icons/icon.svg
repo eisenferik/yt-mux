@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <title>yt-mux</title>
+  <rect width="128" height="128" rx="27" fill="#020d20"/>
+  <path d="M30 28 64 62 98 28M64 62V86" fill="none" stroke="#31c3fb" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M64 113 35.2 85.1H92.8Z" fill="#31c3fb"/>
+</svg>

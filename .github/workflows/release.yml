@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions: {}
+
+jobs:
+  package:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up build tools
+        uses: ./.github/actions/setup
+
+      - name: Build package
+        shell: pwsh
+        run: ./scripts/build.ps1 -Package
+
+      - name: Hash the package
+        shell: pwsh
+        run: |
+          $archive = 'dist/yt-mux-windows-x64.zip'
+          $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $name = [System.IO.Path]::GetFileName((Resolve-Path -LiteralPath $archive))
+          "${hash}  ${name}`n" | Set-Content -LiteralPath dist/SHA256SUMS.txt -Encoding ascii -NoNewline
+          Write-Host "$name $hash"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/yt-mux-windows-x64.zip
+
+      - name: Upload the package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: package
+          path: |
+            dist/yt-mux-windows-x64.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: package
+          path: dist
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$REPO" \
+            --generate-notes \
+            dist/yt-mux-windows-x64.zip \
+            dist/SHA256SUMS.txt

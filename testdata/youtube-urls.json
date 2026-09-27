@@ -1,0 +1,23 @@
+{
+  "allowed": [
+    "https://www.youtube.com/watch?v=abcdefghijk&list=playlist",
+    "https://m.youtube.com/shorts/abcdefghijk",
+    "https://youtube.com/watch?v=abcdefghijk",
+    "https://youtu.be/abcdefghijk?t=10",
+    "https://www.youtube.com/embed/abcdefghijk",
+    "https://www.youtube.com/live/abcdefghijk",
+    "https://music.youtube.com/watch?v=abcdefghijk"
+  ],
+  "rejected": [
+    { "url": "http://youtube.com/watch?v=abcdefghijk", "why": "only HTTPS is accepted" },
+    { "url": "javascript:alert(1)", "why": "only HTTPS is accepted" },
+    { "url": "https://youtube.com.evil.example/watch?v=abcdefghijk", "why": "an allowed host as a prefix is not an allowed host" },
+    { "url": "https://evil-youtube.com/watch?v=abcdefghijk", "why": "suffix matching must require a dot boundary" },
+    { "url": "https://user:pass@youtube.com/watch?v=abcdefghijk", "why": "credentials in the authority are refused" },
+    { "url": "https://youtube.com@evil.example/watch?v=abcdefghijk", "why": "the authority before @ is not the host" },
+    { "url": "https://www.youtube.com/playlist?list=PLtest", "why": "a playlist is not a single video" },
+    { "url": "https://www.youtube.com/channel/UCabcdefghij", "why": "a channel is not a single video" },
+    { "url": "https://www.youtube.com/watch", "why": "watch without v names no video" },
+    { "url": "https://youtu.be/", "why": "an empty path names no video" }
+  ]
+}
