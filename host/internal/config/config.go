@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -64,9 +63,6 @@ func LoadSettings(path string) (Settings, error) {
 	if err := decodeFile(path, &settings); err != nil {
 		return Settings{}, fmt.Errorf("load settings: %w", err)
 	}
-	if err := settings.Validate(); err != nil {
-		return Settings{}, fmt.Errorf("validate settings: %w", err)
-	}
 	settings.Destination = filepath.Clean(settings.Destination)
 	return settings, nil
 }
@@ -75,17 +71,8 @@ func (s Settings) Validate() error {
 	if !filepath.IsAbs(s.Destination) {
 		return errors.New("destination must be an absolute path")
 	}
-	if strings.ContainsRune(s.Destination, '\x00') {
-		return errors.New("destination must not contain NUL")
-	}
 	if len(s.Destination) > 1024 {
 		return errors.New("destination must be at most 1024 UTF-8 bytes")
-	}
-	if _, ok := Presets[s.DefaultPreset]; !ok {
-		return errors.New("defaultPreset is not supported")
-	}
-	if s.SubtitleLanguages == nil {
-		return errors.New("subtitleLanguages is required")
 	}
 	if len(s.SubtitleLanguages) > 10 {
 		return errors.New("subtitleLanguages must contain at most 10 entries")
@@ -153,14 +140,5 @@ func decodeFile(path string, target any) error {
 	}
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return errors.New("unexpected data after JSON document")
-		}
-		return err
-	}
-	return nil
+	return decoder.Decode(target)
 }

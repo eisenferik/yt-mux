@@ -3,12 +3,9 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"errors"
 
 	"github.com/eisenferik/yt-mux/host/internal/config"
-	"github.com/eisenferik/yt-mux/host/internal/cookies"
 	"github.com/eisenferik/yt-mux/host/internal/folderpick"
-	"github.com/eisenferik/yt-mux/host/internal/urlguard"
 )
 
 type requestOutcome struct {
@@ -21,9 +18,6 @@ func (a *App) handleRequest(raw json.RawMessage, active *operation) requestOutco
 	envelope, err := decodeEnvelope(raw)
 	if err != nil {
 		return requestOutcome{fatal: err}
-	}
-	if err := validateRequestID(envelope.ID); err != nil {
-		return fatalInvalidRequestOutcome(envelope.ID, err)
 	}
 
 	switch envelope.Type {
@@ -39,9 +33,6 @@ func (a *App) handleRequest(raw json.RawMessage, active *operation) requestOutco
 		return requestOutcome{reply: settingsMessage{header: newHeader("settings", request.ID), Settings: settings}}
 
 	case "settings.set":
-		if active != nil {
-			return invalidRequestOutcome(envelope.ID, errors.New("an operation is already running"))
-		}
 		var request settingsSetRequest
 		if err := decodeStrict(raw, &request); err != nil {
 			return fatalInvalidRequestOutcome(envelope.ID, err)
@@ -49,7 +40,7 @@ func (a *App) handleRequest(raw json.RawMessage, active *operation) requestOutco
 		saved, err := config.SaveSettings(a.settingsPath, request.Settings)
 		if err != nil {
 			if config.IsSettingsValidationError(err) {
-				return invalidRequestOutcome(request.ID, err)
+				return requestOutcome{reply: newError(request.ID, ErrorKindInvalidRequest, err.Error())}
 			}
 			return fatalHostFailureOutcome(request.ID, err)
 		}
@@ -73,43 +64,26 @@ func (a *App) handleRequest(raw json.RawMessage, active *operation) requestOutco
 			return requestOutcome{reply: newError(request.ID, ErrorKindCancelled, "")}
 		}
 		if err != nil {
-			return requestOutcome{reply: newError(request.ID, ErrorKindDestinationPickFailed, err.Error())}
+			return requestOutcome{reply: newError(request.ID, ErrorKindDestinationPickFailed, "")}
 		}
 		return requestOutcome{reply: destinationMessage{header: newHeader("destination", request.ID), Path: path}}
 
 	case "start":
-		if active != nil {
-			return invalidRequestOutcome(envelope.ID, errors.New("an operation is already running"))
-		}
 		var request startRequest
 		if err := decodeStrict(raw, &request); err != nil {
 			return fatalInvalidRequestOutcome(envelope.ID, err)
-		}
-		normalizedURL, err := urlguard.Normalize(request.URL)
-		if err != nil {
-			return fatalInvalidRequestOutcome(request.ID, err)
-		}
-		preset, ok := config.Presets[request.Preset]
-		if !ok {
-			return fatalInvalidRequestOutcome(request.ID, errors.New("unsupported preset"))
 		}
 		settings, err := config.LoadSettings(a.settingsPath)
 		if err != nil {
 			return fatalHostFailureOutcome(request.ID, err)
 		}
-		if len(request.Cookies) > 0 && !settings.CookiesEnabled {
-			return fatalInvalidRequestOutcome(request.ID, errors.New("cookies are disabled in settings"))
-		}
-		if err := cookies.Validate(request.Cookies); err != nil {
-			return fatalInvalidRequestOutcome(request.ID, err)
-		}
+		preset := config.Presets[request.Preset]
 		plan := &operationPlan{
-			id: request.ID,
 			run: func(operationContext context.Context) (nativeResponse, error) {
 				return a.download(
 					operationContext,
 					request.ID,
-					normalizedURL,
+					request.URL,
 					preset,
 					settings,
 					request.Cookies,
@@ -126,25 +100,13 @@ func (a *App) handleRequest(raw json.RawMessage, active *operation) requestOutco
 		if err := decodeStrict(raw, &request); err != nil {
 			return fatalInvalidRequestOutcome(envelope.ID, err)
 		}
-		if active == nil || active.id != request.ID {
-			return invalidRequestOutcome(request.ID, errors.New("no matching operation is running"))
-		}
 		active.cancel()
-		return requestOutcome{}
-
-	default:
-		return fatalInvalidRequestOutcome(envelope.ID, errors.New("unsupported request type"))
 	}
-}
-
-func invalidRequestOutcome(id string, err error) requestOutcome {
-	return requestOutcome{reply: newError(id, ErrorKindInvalidRequest, err.Error())}
+	return requestOutcome{}
 }
 
 func fatalInvalidRequestOutcome(id string, err error) requestOutcome {
-	outcome := invalidRequestOutcome(id, err)
-	outcome.fatal = err
-	return outcome
+	return requestOutcome{reply: newError(id, ErrorKindInvalidRequest, err.Error()), fatal: err}
 }
 
 func fatalHostFailureOutcome(id string, err error) requestOutcome {

@@ -14,9 +14,6 @@ type Buffer struct {
 }
 
 func New(limit int, redact string) *Buffer {
-	if limit < 1 {
-		limit = 1
-	}
 	return &Buffer{limit: limit, redact: redact}
 }
 

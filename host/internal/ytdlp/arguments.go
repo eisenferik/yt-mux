@@ -46,6 +46,5 @@ func DownloadArguments(binDirectory string, settings config.Settings, preset con
 	if cookiePath != "" {
 		args = append(args, "--cookies", cookiePath)
 	}
-	args = append(args, "--", rawURL)
-	return args
+	return append(args, rawURL)
 }

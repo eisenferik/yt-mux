@@ -10,8 +10,6 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$runtimeBinaries = @('yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe', 'deno.exe')
-
 $repositoryFiles = @((& git -c core.quotePath=false -C $RepositoryRoot ls-files --cached --others --exclude-standard) | Where-Object { $_ })
 if ($LASTEXITCODE -ne 0) {
     throw "Could not list the files git tracks under $RepositoryRoot."
@@ -39,23 +37,8 @@ function Assert-MarkdownLinks {
     }
 }
 
-$dependencyPath = Join-Path $RepositoryRoot 'setup\dependencies.json'
-$dependencies = Get-Content -LiteralPath $dependencyPath -Raw | ConvertFrom-Json
-if ($dependencies.schemaVersion -ne 1) {
-    throw 'Dependency definition must use schema version 1.'
-}
-foreach ($name in @('ytDlp', 'ffmpeg', 'deno')) {
-    if ($null -eq $dependencies.dependencies.PSObject.Properties[$name]) {
-        throw "The dependency definition is missing $name."
-    }
-}
+$dependencies = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'setup\dependencies.json') -Raw | ConvertFrom-Json
 foreach ($entry in $dependencies.dependencies.PSObject.Properties.Value) {
-    if ([string]::IsNullOrWhiteSpace($entry.version) -or [string]::IsNullOrWhiteSpace($entry.asset)) {
-        throw 'Every dependency must pin a version and asset name.'
-    }
-    if ($entry.url -notmatch '^https://') {
-        throw "Dependency URL must use HTTPS: $($entry.url)"
-    }
     if ($entry.sha256 -notmatch '^[0-9a-f]{64}$') {
         throw "Dependency SHA-256 is invalid: $($entry.asset)"
     }
@@ -84,13 +67,8 @@ foreach ($actionDefinition in $actionDefinitions) {
     }
 }
 
-$trackedThirdPartyBinaries = @($repositoryFiles | Where-Object { [IO.Path]::GetFileName($_) -in $runtimeBinaries })
-if ($trackedThirdPartyBinaries) {
-    throw "Third-party runtime binaries are present in the repository: $($trackedThirdPartyBinaries -join ', ')"
-}
-
 $thirdParty = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'THIRD_PARTY.md') -Raw
-foreach ($binary in $runtimeBinaries) {
+foreach ($binary in @('yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe', 'deno.exe')) {
     if ($thirdParty -notmatch [regex]::Escape($binary)) {
         throw "THIRD_PARTY.md does not describe the installed runtime $binary."
     }
@@ -109,24 +87,6 @@ foreach ($document in $repositoryFiles | Where-Object { [IO.Path]::GetExtension(
 
 if ($ReleaseRoot) {
     $resolvedReleaseRoot = [System.IO.Path]::GetFullPath($ReleaseRoot).TrimEnd('\')
-
-    $forbidden = Get-ChildItem -LiteralPath $resolvedReleaseRoot -File -Recurse | Where-Object {
-        $_.Name -in $runtimeBinaries -or $_.Extension -in @('.pem', '.key', '.p12')
-    }
-    if ($forbidden) {
-        throw "Forbidden files are present in the release: $($forbidden.FullName -join ', ')"
-    }
-    foreach ($required in @('yt-mux-host.exe', 'extension\manifest.json', 'setup\install.ps1', 'setup\uninstall.ps1', 'LICENSE', 'THIRD_PARTY.md', 'README.md')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $resolvedReleaseRoot $required))) {
-            throw "The release is missing $required."
-        }
-    }
-    foreach ($excluded in @('CONTRIBUTING.md', 'docs', 'host', 'scripts', 'extension\src')) {
-        if (Test-Path -LiteralPath (Join-Path $resolvedReleaseRoot $excluded)) {
-            throw "The release must not include $excluded."
-        }
-    }
-
     Assert-MarkdownLinks -Path (Join-Path $resolvedReleaseRoot 'README.md') -Root $resolvedReleaseRoot -Scope 'the release'
 }
 

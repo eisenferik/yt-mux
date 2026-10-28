@@ -11,10 +11,6 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 || os.Args[1] != apphost.ExpectedOrigin {
-		fmt.Fprintln(os.Stderr, "yt-mux: rejected native messaging caller origin")
-		os.Exit(2)
-	}
 	executable, err := os.Executable()
 	if err != nil {
 		fail("could not resolve the host executable: %v", err)

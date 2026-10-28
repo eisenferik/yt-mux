@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -43,10 +42,6 @@ func TestMain(m *testing.M) {
 		fmt.Println(`@DONE@C:\Videos\clip.mkv`)
 		os.Exit(0)
 	case "missing-path":
-		os.Exit(0)
-	case "long-line":
-		fmt.Println(strings.Repeat("x", childLineBufferLimit+1))
-		fmt.Println(`@DONE@C:\Videos\clip.mkv`)
 		os.Exit(0)
 	case "hang":
 		if path := os.Getenv(fakeStartedEnv); path != "" {
@@ -100,48 +95,6 @@ func TestAppReportsBrokenSettingsAsHostFailure(t *testing.T) {
 	readMessage(t, protocol.NewReader(&output), &message)
 	if message.Kind != ErrorKindHostFailure || message.ID != "request1" || message.Detail != "" {
 		t.Fatalf("unexpected host failure response: %#v", message)
-	}
-}
-
-func TestAppDoesNotRetryADeadResponseWriter(t *testing.T) {
-	root := writeTestConfiguration(t)
-	var input bytes.Buffer
-	if err := protocol.NewWriter(&input).Send(settingsGetRequest{Version: 1, Type: "settings.get", ID: "request1"}); err != nil {
-		t.Fatal(err)
-	}
-	output := &rejectingWriter{}
-	app := New(root, &input, output, &bytes.Buffer{})
-
-	if err := app.Run(); err == nil {
-		t.Fatal("expected the response write to fail")
-	}
-	if output.writes != 1 {
-		t.Fatalf("response writes: got %d, want 1", output.writes)
-	}
-}
-
-func TestAppRejectsDisallowedURLBeforeStartingAProcess(t *testing.T) {
-	root := writeTestConfiguration(t)
-	var input bytes.Buffer
-	request := startRequest{
-		Version: 1,
-		Type:    "start",
-		ID:      "request1",
-		URL:     "https://evil.example/video",
-		Preset:  "archive",
-	}
-	if err := protocol.NewWriter(&input).Send(request); err != nil {
-		t.Fatal(err)
-	}
-	var output bytes.Buffer
-	app := New(root, &input, &output, &bytes.Buffer{})
-	if err := app.Run(); err == nil {
-		t.Fatal("expected invalid request to terminate the host")
-	}
-	var message errorMessage
-	readMessage(t, protocol.NewReader(&output), &message)
-	if message.Kind != ErrorKindInvalidRequest || message.ID != "request1" {
-		t.Fatalf("unexpected error response: %#v", message)
 	}
 }
 
@@ -200,31 +153,30 @@ func TestAppReportsMissingOutputPathWhenChildOmitsDone(t *testing.T) {
 	expectAcceptedThenError(t, reader, ErrorKindMissingOutputPath)
 }
 
-func TestFailedOutcomeIgnoresLoginHintsWhenCookiesWereUsed(t *testing.T) {
-	loginLine := "ERROR: [youtube] abc: Sign in to confirm you're not a bot."
+func TestFailedOutcomeReportsLoginHintsAsLoginRequired(t *testing.T) {
 	failed := processResult{waitErr: errors.New("exit status 1")}
 
-	message := failedOutcome(t, failed, false, loginLine)
+	message := failedOutcome(t, failed, "ERROR: [youtube] abc: Sign in to confirm you're not a bot.")
 	if message.Kind != ErrorKindYTDLPLoginRequired || message.Detail != "" {
-		t.Fatalf("without cookies: %#v", message)
+		t.Fatalf("login failure: %#v", message)
 	}
-	message = failedOutcome(t, failed, true, loginLine)
-	if message.Kind != ErrorKindYTDLPFailed || message.Detail != loginLine {
-		t.Fatalf("with cookies: %#v", message)
+	message = failedOutcome(t, failed, "ERROR: [youtube] abc: Join this channel to get access to members-only content like this video, and other exclusive perks.")
+	if message.Kind != ErrorKindYTDLPMembersOnly || message.Detail != "" {
+		t.Fatalf("members-only failure: %#v", message)
 	}
-	message = failedOutcome(t, failed, false, "ERROR: Requested format is not available")
+	message = failedOutcome(t, failed, "ERROR: Requested format is not available")
 	if message.Kind != ErrorKindYTDLPFailed || message.Detail == "" {
 		t.Fatalf("unrelated failure: %#v", message)
 	}
 }
 
-func failedOutcome(t *testing.T, result processResult, cookiesUsed bool, lines ...string) errorMessage {
+func failedOutcome(t *testing.T, result processResult, lines ...string) errorMessage {
 	t.Helper()
 	outputTail := tail.New(tailLineLimit, "")
 	for _, line := range lines {
 		outputTail.Add(line)
 	}
-	message, ok := result.outcome("request1", cookiesUsed, outputTail).(errorMessage)
+	message, ok := result.outcome("request1", outputTail).(errorMessage)
 	if !ok {
 		t.Fatalf("expected an error message for %+v", result)
 	}
@@ -324,25 +276,6 @@ func expectAcceptedThenError(t *testing.T, reader *protocol.Reader, kind ErrorKi
 		t.Fatalf("unexpected failure: %#v", failure)
 	}
 	return failure
-}
-
-type rejectingWriter struct {
-	writes int
-}
-
-func (w *rejectingWriter) Write(_ []byte) (int, error) {
-	w.writes++
-	return 0, errors.New("writer rejected output")
-}
-
-func TestAppReportsAnUnreadableChildStream(t *testing.T) {
-	t.Setenv(fakeYTDLPEnv, "long-line")
-	reader := runStartedDownload(t, writeTestConfigurationWithFakeYTDLP(t))
-
-	failure := expectAcceptedThenError(t, reader, ErrorKindProcessOutputFailed)
-	if failure.Detail != "" {
-		t.Fatalf("unexpected failure: %#v", failure)
-	}
 }
 
 func TestAppReportsACookieFileItCannotCreate(t *testing.T) {

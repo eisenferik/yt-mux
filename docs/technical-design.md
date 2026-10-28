@@ -38,20 +38,17 @@ descendant dies with it.
 
 The extension has no popup and no content script.
 
-## Trust boundary
+## Host and extension
 
 The host runs nothing the extension supplies. The extension names a preset;
 the host itself holds what each preset passes to `yt-dlp`, and finds the
 runtimes beside its own executable. The host creates the executable directly
-and never starts a shell. The URL reaches `yt-dlp` as one
-argument after the `--` end-of-options marker.
+and never starts a shell.
 
 A URL is accepted only as a YouTube address that names a single video.
 
 The host talks to one extension, and that identity is fixed rather than
 assigned when it is installed.
-
-Cookies are refused unless the host's own settings say they are enabled.
 
 ## Configuration
 
@@ -97,9 +94,7 @@ failure.
 Cookies are off by default. The permission is requested at the action that
 needs it and covers only YouTube and Google.
 
-The host writes them to a file it creates, never to one that already exists,
-under an access list that admits only its owner. The file is gone when the
-child exits. At startup, the host attempts to remove cookie files whose names
+The host writes them to a file that is gone when the child exits. At startup, the host attempts to remove cookie files whose names
 match its own convention and whose last write was more than 24 hours ago. It
 does not check whether a file is in use.
 

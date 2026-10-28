@@ -1,20 +1,19 @@
 package cookies
 
 import (
-	"bufio"
-	"errors"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
-	"io"
-	"math"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 )
 
-const (
-	netscapeHeader       = "# Netscape HTTP Cookie File\n# Generated temporarily by yt-mux.\n\n"
-	maxCookies           = 500
-	maxDomainBytes       = 253
-	maxExpirationSeconds = 253402300799
-)
+const netscapeHeader = "# Netscape HTTP Cookie File\n# Generated temporarily by yt-mux.\n\n"
+
+var cookieFilename = regexp.MustCompile(`^cookies-[0-9a-f]{32}\.txt$`)
 
 type Cookie struct {
 	Domain         string  `json:"domain"`
@@ -26,55 +25,55 @@ type Cookie struct {
 	ExpirationDate float64 `json:"expirationDate,omitempty"`
 }
 
-func Validate(items []Cookie) error {
-	if len(items) > maxCookies {
-		return fmt.Errorf("cookie count exceeds %d", maxCookies)
+func WriteFile(directory string, items []Cookie) (string, error) {
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return "", fmt.Errorf("create cookie directory: %w", err)
 	}
-	for index, cookie := range items {
-		if _, ok := normalizeDomain(cookie.Domain); !ok {
-			return fmt.Errorf("cookie %d has a disallowed domain", index)
+	random := make([]byte, 16)
+	rand.Read(random)
+	path := filepath.Join(directory, "cookies-"+hex.EncodeToString(random)+".txt")
+	if err := os.WriteFile(path, []byte(netscape(items)), 0o600); err != nil {
+		_ = os.Remove(path)
+		return "", fmt.Errorf("write cookie file: %w", err)
+	}
+	return path, nil
+}
+
+func CleanupStale(directory string, now time.Time) error {
+	entries, err := os.ReadDir(directory)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	cutoff := now.Add(-24 * time.Hour)
+	for _, entry := range entries {
+		if !cookieFilename.MatchString(entry.Name()) {
+			continue
 		}
-		if cookie.Name == "" || len(cookie.Name) > 256 || unsafeField(cookie.Name) {
-			return fmt.Errorf("cookie %d has an invalid name", index)
+		info, err := entry.Info()
+		if err != nil || !info.ModTime().Before(cutoff) {
+			continue
 		}
-		if len(cookie.Value) > 8192 || unsafeField(cookie.Value) {
-			return fmt.Errorf("cookie %d has an invalid value", index)
-		}
-		if cookie.Path == "" || !strings.HasPrefix(cookie.Path, "/") || len(cookie.Path) > 2048 || unsafeField(cookie.Path) {
-			return fmt.Errorf("cookie %d has an invalid path", index)
-		}
-		if _, ok := normalizeExpiration(cookie.ExpirationDate); !ok {
-			return fmt.Errorf("cookie %d has an invalid expiration", index)
-		}
+		_ = os.Remove(filepath.Join(directory, entry.Name()))
 	}
 	return nil
 }
 
-func writeNetscape(w io.Writer, items []Cookie) error {
-	buffered := bufio.NewWriter(w)
-	if _, err := buffered.WriteString(netscapeHeader); err != nil {
-		return err
-	}
+func netscape(items []Cookie) string {
+	var file strings.Builder
+	file.WriteString(netscapeHeader)
 	for _, cookie := range items {
-		domain, ok := normalizeDomain(cookie.Domain)
-		if !ok {
-			return errors.New("cookie domain is not writable")
-		}
+		domain := cookie.Domain
 		includeSubdomains := strings.HasPrefix(domain, ".")
 		if cookie.HTTPOnly {
 			domain = "#HttpOnly_" + domain
 		}
-		expiration, ok := normalizeExpiration(cookie.ExpirationDate)
-		if !ok {
-			return errors.New("cookie expiration is not writable")
-		}
-		line := fmt.Sprintf("%s\t%s\t%s\t%s\t%d\t%s\t%s\n",
-			domain, netscapeBoolean(includeSubdomains), cookie.Path, netscapeBoolean(cookie.Secure), expiration, cookie.Name, cookie.Value)
-		if _, err := buffered.WriteString(line); err != nil {
-			return err
-		}
+		fmt.Fprintf(&file, "%s\t%s\t%s\t%s\t%d\t%s\t%s\n",
+			domain, netscapeBoolean(includeSubdomains), cookie.Path, netscapeBoolean(cookie.Secure), int64(cookie.ExpirationDate), cookie.Name, cookie.Value)
 	}
-	return buffered.Flush()
+	return file.String()
 }
 
 func netscapeBoolean(value bool) string {
@@ -82,39 +81,4 @@ func netscapeBoolean(value bool) string {
 		return "TRUE"
 	}
 	return "FALSE"
-}
-
-func normalizeDomain(domain string) (string, bool) {
-	lowered := strings.ToLower(domain)
-	host := strings.TrimPrefix(lowered, ".")
-	if host == "" || len(host) > maxDomainBytes {
-		return "", false
-	}
-	if strings.HasPrefix(host, ".") || strings.Contains(host, "..") {
-		return "", false
-	}
-	for _, character := range host {
-		if character >= 'a' && character <= 'z' || character >= '0' && character <= '9' {
-			continue
-		}
-		if character != '.' && character != '-' {
-			return "", false
-		}
-	}
-	if host != "youtube.com" && !strings.HasSuffix(host, ".youtube.com") &&
-		host != "google.com" && !strings.HasSuffix(host, ".google.com") {
-		return "", false
-	}
-	return lowered, true
-}
-
-func normalizeExpiration(value float64) (int64, bool) {
-	if math.IsNaN(value) || value < 0 || value > maxExpirationSeconds {
-		return 0, false
-	}
-	return int64(value), true
-}
-
-func unsafeField(value string) bool {
-	return strings.ContainsAny(value, "\x00\r\n\t")
 }

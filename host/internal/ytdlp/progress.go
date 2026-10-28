@@ -86,13 +86,12 @@ func ParseDone(line string) (string, bool) {
 	if !strings.HasPrefix(line, donePrefix) {
 		return "", false
 	}
-	path := strings.TrimSpace(strings.TrimPrefix(line, donePrefix))
-	return path, path != ""
+	return strings.TrimSpace(strings.TrimPrefix(line, donePrefix)), true
 }
 
 func parseInteger(value string) *int64 {
 	parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
-	if err != nil || parsed < 0 {
+	if err != nil {
 		return nil
 	}
 	return &parsed

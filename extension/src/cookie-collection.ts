@@ -12,17 +12,11 @@ export async function collectCookies(): Promise<CookieCollection> {
   if (access !== "granted") {
     return { access, cookies: [] };
   }
-  let stored: chrome.cookies.Cookie[][];
-  try {
-    stored = await Promise.all([
-      chrome.cookies.getAll({ domain: "youtube.com" }),
-      chrome.cookies.getAll({ domain: "google.com" }),
-    ]);
-  } catch {
-    return { access: "unreadable", cookies: [] };
-  }
-  const unique = new Map<string, NativeCookie>();
-  for (const cookie of stored.flat()) {
+  const stored = await Promise.all([
+    chrome.cookies.getAll({ domain: "youtube.com" }),
+    chrome.cookies.getAll({ domain: "google.com" }),
+  ]);
+  const cookies = stored.flat().map((cookie) => {
     const converted: NativeCookie = {
       domain: cookie.domain,
       name: cookie.name,
@@ -36,7 +30,7 @@ export async function collectCookies(): Promise<CookieCollection> {
     if (cookie.expirationDate !== undefined) {
       converted.expirationDate = cookie.expirationDate;
     }
-    unique.set(`${cookie.domain}\0${cookie.path}\0${cookie.name}`, converted);
-  }
-  return { access: "granted", cookies: [...unique.values()] };
+    return converted;
+  });
+  return { access: "granted", cookies };
 }

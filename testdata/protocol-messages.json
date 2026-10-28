@@ -89,22 +89,5 @@
         "id": "request1"
       }
     }
-  ],
-  "rejected": [
-    {
-      "name": "start carrying downloader arguments",
-      "message": {
-        "v": 1,
-        "type": "start",
-        "id": "request1",
-        "url": "https://www.youtube.com/watch?v=abcdefghijk",
-        "preset": "archive",
-        "args": [
-          "--exec",
-          "bad"
-        ]
-      },
-      "why": "the host must not accept a field it does not define"
-    }
   ]
 }

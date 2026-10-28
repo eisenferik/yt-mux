@@ -11,6 +11,8 @@ export const presetTitles = {
 } satisfies Record<PresetName, string>;
 
 const genericHostFailureMessage = "The native host could not complete the request.";
+const cookieAccessOffMessage = "Cookie access is off. Save options with signed-in YouTube cookies turned on.";
+const setupFixableHostErrors = ["Specified native messaging host not found.", "Failed to start native messaging host."];
 const badgeActive = "#2563eb";
 const badgeDone = "#15803d";
 const badgeFailed = "#b91c1c";
@@ -58,14 +60,19 @@ async function setBadge(tabID: number, text: string, color: string): Promise<voi
 }
 
 export function notify(title: string, message: string): void {
-  void chrome.notifications
-    .create({
-      type: "basic",
-      iconUrl: "icons/icon128.png",
-      title,
-      message: message.slice(0, 240),
-    })
-    .catch(() => undefined);
+  void chrome.notifications.create({
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title,
+    message: message.slice(0, 240),
+  });
+}
+
+export function disconnectDetail(lastError: string | undefined): string {
+  if (lastError !== undefined && setupFixableHostErrors.includes(lastError)) {
+    return "Run the yt-mux setup script.";
+  }
+  return lastError ?? "The native host disconnected unexpectedly.";
 }
 
 function genericHostFailure(_kind: never): string {
@@ -75,28 +82,27 @@ function genericHostFailure(_kind: never): string {
 interface ErrorDetailContext {
   settings: Settings | undefined;
   cookieAccess: CookieAccess;
-  kind: ErrorKind;
+  kind: Exclude<ErrorKind, "CANCELLED">;
 }
 
 export function errorDetail({ settings, cookieAccess, kind }: ErrorDetailContext): string {
   switch (kind) {
     case "YTDLP_LOGIN_REQUIRED":
       if (!settings?.cookiesEnabled) {
-        return (
-          "This video needs your YouTube sign-in. " +
-          "Turn on signed-in YouTube cookies in extension options, then try again."
-        );
+        return "This video needs YouTube sign-in. Turn on signed-in YouTube cookies in options.";
       }
       if (cookieAccess === "denied") {
-        return (
-          "Cookie access is disabled. " +
-          "Save extension options with signed-in YouTube cookies turned on, then try again."
-        );
+        return cookieAccessOffMessage;
       }
-      if (cookieAccess === "unreadable") {
-        return "Your browser cookies could not be read, so the download ran signed out. Try again.";
+      return "Sign in to YouTube with an account that can watch this video.";
+    case "YTDLP_MEMBERS_ONLY":
+      if (!settings?.cookiesEnabled) {
+        return "This video is for channel members. Turn on signed-in YouTube cookies in options.";
       }
-      return "Sign in to YouTube in this browser, then try again.";
+      if (cookieAccess === "denied") {
+        return cookieAccessOffMessage;
+      }
+      return "This video is for channel members. Sign in to YouTube with a member account.";
     case "YTDLP_FAILED":
       return "yt-dlp could not download this video.";
     case "PROCESS_START_FAILED":
@@ -105,11 +111,8 @@ export function errorDetail({ settings, cookieAccess, kind }: ErrorDetailContext
       return "The temporary authentication file could not be created.";
     case "MISSING_OUTPUT_PATH":
       return "The download finished without reporting a saved file.";
-    case "CANCELLED":
-      return "The download was cancelled.";
     case "INVALID_REQUEST":
     case "HOST_FAILURE":
-    case "PROCESS_OUTPUT_FAILED":
     case "DESTINATION_PICK_FAILED":
       return genericHostFailureMessage;
     default:

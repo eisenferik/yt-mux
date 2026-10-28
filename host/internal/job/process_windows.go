@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"sync"
 	"syscall"
 	"unsafe"
 
@@ -15,12 +14,10 @@ import (
 )
 
 type Process struct {
-	cmd       *exec.Cmd
-	job       windows.Handle
-	stdout    io.ReadCloser
-	stderr    io.ReadCloser
-	terminate sync.Once
-	close     sync.Once
+	cmd    *exec.Cmd
+	job    windows.Handle
+	stdout io.ReadCloser
+	stderr io.ReadCloser
 }
 
 func Start(executable string, args []string) (*Process, error) {
@@ -130,17 +127,9 @@ func (p *Process) Wait() error {
 }
 
 func (p *Process) Terminate() error {
-	var err error
-	p.terminate.Do(func() {
-		err = windows.TerminateJobObject(p.job, 1)
-	})
-	return err
+	return windows.TerminateJobObject(p.job, 1)
 }
 
 func (p *Process) Close() error {
-	var err error
-	p.close.Do(func() {
-		err = windows.CloseHandle(p.job)
-	})
-	return err
+	return windows.CloseHandle(p.job)
 }

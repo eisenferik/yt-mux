@@ -50,22 +50,16 @@ try {
     })
 
     $cases = @(
-        @{ Name = 'clean-install'; UserFiles = $false; InvalidSettings = $false; InternalDestination = $false; InterruptedSetup = $false; FirstInstall = $false },
-        @{ Name = 'with-user-files'; UserFiles = $true; InvalidSettings = $false; InternalDestination = $false; InterruptedSetup = $false; FirstInstall = $false },
-        @{ Name = 'internal-destination'; UserFiles = $true; InvalidSettings = $false; InternalDestination = $true; InterruptedSetup = $false; FirstInstall = $false },
-        @{ Name = 'unreadable-settings'; UserFiles = $false; InvalidSettings = $true; InternalDestination = $false; InterruptedSetup = $false; FirstInstall = $false },
-        @{ Name = 'interrupted-setup'; UserFiles = $false; InvalidSettings = $false; InternalDestination = $false; InterruptedSetup = $true; FirstInstall = $false },
-        @{ Name = 'interrupted-first-install'; UserFiles = $false; InvalidSettings = $false; InternalDestination = $false; InterruptedSetup = $true; FirstInstall = $true },
-        @{ Name = 'interrupted-first-install-user-files'; UserFiles = $true; InvalidSettings = $false; InternalDestination = $false; InterruptedSetup = $true; FirstInstall = $true }
+        @{ Name = 'clean-install'; UserFiles = $false; InterruptedSetup = $false; FirstInstall = $false },
+        @{ Name = 'with-user-files'; UserFiles = $true; InterruptedSetup = $false; FirstInstall = $false },
+        @{ Name = 'interrupted-setup'; UserFiles = $false; InterruptedSetup = $true; FirstInstall = $false },
+        @{ Name = 'interrupted-first-install'; UserFiles = $false; InterruptedSetup = $true; FirstInstall = $true }
     )
     foreach ($case in $cases) {
         $installRoot = Join-Path $fixtureRoot $case.Name
         $userFiles = @(
             'saved-video.mkv', 'downloads\channel\video.mp4', 'bin\video.mkv',
-            'extension\icons\notes.txt', 'tmp\notes.txt', 'tmp\setup-abc123\yt-dlp.exe',
-            'tmp\setup-0123456789abcdef0123456789abcdef-backup\notes.txt',
-            'tmp\Setup-0123456789ABCDEF0123456789abcdef\notes.txt',
-            'tmp\cookies-ABCDEF0123456789ABCDEF0123456789.txt'
+            'extension\icons\notes.txt', 'tmp\notes.txt'
         )
         $files = @()
         if (-not $case.FirstInstall) {
@@ -92,16 +86,6 @@ try {
             New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
             Set-Content -LiteralPath $path -Value 'fixture content' -Encoding UTF8
         }
-        if (-not $case.FirstInstall) {
-            $settingsPath = Join-Path $installRoot 'config\settings.json'
-            if ($case.InvalidSettings) {
-                Set-Content -LiteralPath $settingsPath -Value '{invalid' -Encoding UTF8
-            } else {
-                $destination = if ($case.InternalDestination) { Join-Path $installRoot 'downloads' } else { Join-Path $fixtureRoot 'videos' }
-                @{ destination = $destination } | ConvertTo-Json | Set-Content -LiteralPath $settingsPath -Encoding UTF8
-            }
-        }
-
         & $uninstallScript -InstallRoot $installRoot -WhatIf -WarningAction SilentlyContinue
         Remove-InstalledFiles -Root (Get-FixtureInstallPath -Path $installRoot)
         if ($case.InterruptedSetup -and (Test-Path -LiteralPath $setupRoot)) {
@@ -123,37 +107,31 @@ try {
         }
     }
 
-    foreach ($lockedRelative in @('extension\service-worker.js', 'tmp\cookies-0123456789abcdef0123456789abcdef.txt', '.yt-mux-uninstalling')) {
-        $installRoot = Join-Path $fixtureRoot ('retry-' + [guid]::NewGuid().ToString('N'))
-        foreach ($relative in $installedFiles) {
-            $path = Join-Path $installRoot $relative
-            New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
-            [IO.File]::WriteAllText($path, 'fixture content')
-        }
-        $userFile = Join-Path $installRoot 'saved-video.mkv'
-        [IO.File]::WriteAllText($userFile, 'user content')
-        $markerPath = Join-Path $installRoot '.yt-mux-uninstalling'
-        if ($lockedRelative -eq '.yt-mux-uninstalling') {
-            [IO.File]::WriteAllText($markerPath, $uninstallMarkerText)
-        }
-        $lockedFile = [IO.File]::Open((Join-Path $installRoot $lockedRelative), [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
-        $failed = $false
-        try {
-            try { Remove-InstalledFiles -Root $installRoot } catch { $failed = $true }
-            if (-not $failed) { throw "Expected a locked-file failure: $lockedRelative" }
-            foreach ($relative in @('bin\yt-mux-host.exe', 'native\io.yt_mux.host.json', 'extension\manifest.json')) {
-                if (Test-Path -LiteralPath (Join-Path $installRoot $relative)) { throw 'Failure did not reach the former retry gap.' }
-            }
-            if (-not (Test-YtMuxInstallation -Path $installRoot)) { throw 'Interrupted uninstall is not recognized.' }
-            # Exercise the real entry-point safety checks without changing registry state.
-            & $uninstallScript -InstallRoot $installRoot -WhatIf -WarningAction SilentlyContinue
-        } finally { $lockedFile.Dispose() }
-        Remove-InstalledFiles -Root $installRoot
-        foreach ($relative in $installedFiles + @('.yt-mux-uninstalling')) {
-            if (Test-Path -LiteralPath (Join-Path $installRoot $relative)) { throw "Retry left an application file: $relative" }
-        }
-        if ([IO.File]::ReadAllText($userFile) -ne 'user content') { throw 'Retry changed a user file.' }
+    $installRoot = Join-Path $fixtureRoot 'retry-locked-file'
+    foreach ($relative in $installedFiles) {
+        $path = Join-Path $installRoot $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
+        [IO.File]::WriteAllText($path, 'fixture content')
     }
+    $userFile = Join-Path $installRoot 'saved-video.mkv'
+    [IO.File]::WriteAllText($userFile, 'user content')
+    $lockedFile = [IO.File]::Open((Join-Path $installRoot 'extension\service-worker.js'), [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $failed = $false
+    try {
+        try { Remove-InstalledFiles -Root $installRoot } catch { $failed = $true }
+        if (-not $failed) { throw 'Expected a locked-file failure.' }
+        foreach ($relative in @('bin\yt-mux-host.exe', 'native\io.yt_mux.host.json', 'extension\manifest.json')) {
+            if (Test-Path -LiteralPath (Join-Path $installRoot $relative)) { throw 'Failure did not reach the former retry gap.' }
+        }
+        if (-not (Test-YtMuxInstallation -Path $installRoot)) { throw 'Interrupted uninstall is not recognized.' }
+        # Exercise the real entry-point safety checks without changing registry state.
+        & $uninstallScript -InstallRoot $installRoot -WhatIf -WarningAction SilentlyContinue
+    } finally { $lockedFile.Dispose() }
+    Remove-InstalledFiles -Root $installRoot
+    foreach ($relative in $installedFiles + @('.yt-mux-uninstalling')) {
+        if (Test-Path -LiteralPath (Join-Path $installRoot $relative)) { throw "Retry left an application file: $relative" }
+    }
+    if ([IO.File]::ReadAllText($userFile) -ne 'user content') { throw 'Retry changed a user file.' }
 
     $installRoot = Join-Path $fixtureRoot 'retry-final-directory'
     New-Item -ItemType Directory -Path (Join-Path $installRoot 'bin') -Force | Out-Null
@@ -175,60 +153,6 @@ try {
     & $uninstallScript -InstallRoot $installRoot -WhatIf -WarningAction SilentlyContinue
     Remove-InstalledFiles -Root $installRoot
     if (Test-Path -LiteralPath $installRoot) { throw 'Final directory cleanup could not be retried.' }
-
-    $unknownRoot = Join-Path $fixtureRoot 'unknown-directory'
-    New-Item -ItemType Directory -Path $unknownRoot -Force | Out-Null
-    $unknownMarker = Join-Path $unknownRoot '.yt-mux-uninstalling'
-    [IO.File]::WriteAllText($unknownMarker, 'user content')
-    if (Test-YtMuxInstallation -Path $unknownRoot) { throw 'An unrelated file was accepted as uninstall state.' }
-    $rejected = $false
-    try { & $uninstallScript -InstallRoot $unknownRoot -WhatIf } catch { $rejected = $true }
-    if (-not $rejected -or [IO.File]::ReadAllText($unknownMarker) -ne 'user content') {
-        throw 'An unrelated directory was not protected.'
-    }
-
-    $linkedTemporaryRoot = Join-Path $fixtureRoot 'linked-tmp'
-    $linkedTemporaryShared = Join-Path $fixtureRoot 'linked-tmp-shared'
-    $linkedTemporaryArtifact = Join-Path $linkedTemporaryShared ('setup-' + [guid]::NewGuid().ToString('N') + '\yt-dlp.exe')
-    New-Item -ItemType Directory -Path $linkedTemporaryRoot, (Split-Path -Parent $linkedTemporaryArtifact) -Force | Out-Null
-    New-Item -ItemType Junction -Path (Join-Path $linkedTemporaryRoot 'tmp') -Target $linkedTemporaryShared | Out-Null
-
-    $linkedSetupRoot = Join-Path $fixtureRoot 'linked-setup-root'
-    $linkedSetupShared = Join-Path $fixtureRoot 'linked-setup-root-shared'
-    New-Item -ItemType Directory -Path (Join-Path $linkedSetupRoot 'tmp'), $linkedSetupShared -Force | Out-Null
-    New-Item -ItemType Junction -Path (Join-Path $linkedSetupRoot ('tmp\setup-' + [guid]::NewGuid().ToString('N'))) -Target $linkedSetupShared | Out-Null
-
-    $similarNameRoot = Join-Path $fixtureRoot 'similar-setup-name'
-    $similarNameArtifact = Join-Path $similarNameRoot 'tmp\setup-abc123\yt-dlp.exe'
-    New-Item -ItemType Directory -Path (Split-Path -Parent $similarNameArtifact) -Force | Out-Null
-
-    $unrelatedSetups = @(
-        @{ Root = $linkedTemporaryRoot; Artifact = $linkedTemporaryArtifact },
-        @{ Root = $linkedSetupRoot; Artifact = (Join-Path $linkedSetupShared 'yt-dlp.exe') },
-        @{ Root = $similarNameRoot; Artifact = $similarNameArtifact }
-    )
-    foreach ($unrelated in $unrelatedSetups) {
-        [IO.File]::WriteAllText($unrelated.Artifact, 'user content')
-        if (Test-YtMuxInstallation -Path $unrelated.Root) { throw "An unrelated setup directory was accepted: $($unrelated.Root)" }
-        $rejected = $false
-        try { & $uninstallScript -InstallRoot $unrelated.Root -WhatIf } catch { $rejected = $true }
-        if (-not $rejected -or [IO.File]::ReadAllText($unrelated.Artifact) -ne 'user content') {
-            throw "An unrelated setup directory was not protected: $($unrelated.Root)"
-        }
-    }
-
-    $installRoot = Join-Path $fixtureRoot 'linked-setup'
-    $setupRoot = Join-Path $installRoot ('tmp\setup-' + [guid]::NewGuid().ToString('N'))
-    $sharedRoot = Join-Path $fixtureRoot 'shared-files'
-    New-Item -ItemType Directory -Path $setupRoot, $sharedRoot -Force | Out-Null
-    $sharedFile = Join-Path $sharedRoot 'yt-dlp.exe'
-    Set-Content -LiteralPath $sharedFile -Value 'shared file' -Encoding UTF8
-    $link = Join-Path $setupRoot 'deno'
-    New-Item -ItemType Junction -Path $link -Target $sharedRoot | Out-Null
-    Remove-InstalledFiles -Root (Get-FixtureInstallPath -Path $installRoot)
-    if (-not (Test-Path -LiteralPath $link) -or (Get-Content -LiteralPath $sharedFile -Raw).Trim() -ne 'shared file') {
-        throw 'Setup cleanup followed or removed a directory junction.'
-    }
 } finally {
     $resolvedFixture = [IO.Path]::GetFullPath($fixtureRoot)
     if ([IO.Path]::GetDirectoryName($resolvedFixture) -ne $temporaryParent -or

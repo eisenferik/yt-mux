@@ -2,32 +2,22 @@ package ytdlp
 
 import "strings"
 
-var loginRequiredMarkers = []string{
-	"sign in",
-	"--cookies",
-	"not a bot",
-	"confirm your age",
-	"age-restricted",
-	"age restricted",
-	"members-only",
-	"members only",
-	"login required",
-}
+type FailureReason int
+
+const (
+	FailureOther FailureReason = iota
+	FailureLoginRequired
+	FailureMembersOnly
+)
 
 type FailureAnalysis struct {
-	LoginRequired bool
-	Diagnostic    string
+	Reason     FailureReason
+	Diagnostic string
 }
 
 func AnalyzeFailure(lines []string) FailureAnalysis {
-	analysis := FailureAnalysis{Diagnostic: diagnosticLine(lines)}
-	for _, line := range lines {
-		if loginRequiredLine(line) {
-			analysis.LoginRequired = true
-			break
-		}
-	}
-	return analysis
+	diagnostic := diagnosticLine(lines)
+	return FailureAnalysis{Reason: failureReason(diagnostic), Diagnostic: diagnostic}
 }
 
 func diagnosticLine(lines []string) string {
@@ -42,17 +32,17 @@ func diagnosticLine(lines []string) string {
 	return ""
 }
 
-func loginRequiredLine(line string) bool {
+func failureReason(line string) FailureReason {
+	if !strings.HasPrefix(line, "ERROR: [youtube") {
+		return FailureOther
+	}
 	lowered := strings.ToLower(line)
-	lowered = strings.ReplaceAll(lowered, "\u2019", "'")
-	lowered = strings.ReplaceAll(lowered, "\u2018", "'")
-	if !strings.Contains(lowered, "error:") && !strings.Contains(lowered, "warning:") {
-		return false
+	switch {
+	case strings.Contains(lowered, "members-only"):
+		return FailureMembersOnly
+	case strings.Contains(lowered, "sign in"):
+		return FailureLoginRequired
+	default:
+		return FailureOther
 	}
-	for _, marker := range loginRequiredMarkers {
-		if strings.Contains(lowered, marker) {
-			return true
-		}
-	}
-	return false
 }

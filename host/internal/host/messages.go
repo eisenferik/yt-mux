@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"regexp"
 
 	"github.com/eisenferik/yt-mux/host/internal/config"
 	"github.com/eisenferik/yt-mux/host/internal/cookies"
@@ -23,13 +20,11 @@ const (
 	ErrorKindDestinationPickFailed ErrorKind = "DESTINATION_PICK_FAILED"
 	ErrorKindCookieFileFailed      ErrorKind = "COOKIE_FILE_FAILED"
 	ErrorKindProcessStartFailed    ErrorKind = "PROCESS_START_FAILED"
-	ErrorKindProcessOutputFailed   ErrorKind = "PROCESS_OUTPUT_FAILED"
 	ErrorKindMissingOutputPath     ErrorKind = "MISSING_OUTPUT_PATH"
 	ErrorKindYTDLPFailed           ErrorKind = "YTDLP_FAILED"
 	ErrorKindYTDLPLoginRequired    ErrorKind = "YTDLP_LOGIN_REQUIRED"
+	ErrorKindYTDLPMembersOnly      ErrorKind = "YTDLP_MEMBERS_ONLY"
 )
-
-var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 type header struct {
 	Version int    `json:"v"`
@@ -130,12 +125,6 @@ func decodeEnvelope(raw json.RawMessage) (header, error) {
 	if err := json.Unmarshal(raw, &result); err != nil {
 		return header{}, errors.New("invalid request envelope")
 	}
-	if result.Version != ProtocolVersion {
-		return header{}, fmt.Errorf("unsupported protocol version %d", result.Version)
-	}
-	if result.Type == "" {
-		return header{}, errors.New("request type is required")
-	}
 	return result, nil
 }
 
@@ -144,16 +133,6 @@ func decodeStrict(raw json.RawMessage, target any) error {
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return errors.New("request does not match the required schema")
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return errors.New("request contains trailing data")
-	}
-	return nil
-}
-
-func validateRequestID(id string) error {
-	if !requestIDPattern.MatchString(id) {
-		return errors.New("request ID is invalid")
 	}
 	return nil
 }

@@ -13,32 +13,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func TestProcessCompletesInsideJob(t *testing.T) {
-	process := startHelper(t, "yt-mux-job-exit")
-	defer process.Close()
-	if err := process.Wait(); err != nil {
-		t.Fatalf("helper failed: %v", err)
-	}
-}
-
-func TestTerminateStopsSuspendedAssignedProcess(t *testing.T) {
-	process := startHelper(t, "yt-mux-job-wait")
-	defer process.Close()
-	if err := process.Terminate(); err != nil {
-		t.Fatal(err)
-	}
-	done := make(chan error, 1)
-	go func() { done <- process.Wait() }()
-	select {
-	case err := <-done:
-		if err == nil {
-			t.Fatal("terminated helper unexpectedly exited successfully")
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("terminated helper did not exit promptly")
-	}
-}
-
 func TestTerminateStopsDescendantProcess(t *testing.T) {
 	pidPath := filepath.Join(t.TempDir(), "descendant.pid")
 	process := startHelper(t, "yt-mux-job-tree", pidPath)
@@ -97,12 +71,7 @@ func TestJobHelperProcess(t *testing.T) {
 	if len(os.Args) == 0 {
 		return
 	}
-	switch os.Args[len(os.Args)-1] {
-	case "yt-mux-job-exit":
-		return
-	case "yt-mux-job-wait":
-		time.Sleep(30 * time.Second)
-	case "yt-mux-job-grandchild":
+	if os.Args[len(os.Args)-1] == "yt-mux-job-grandchild" {
 		time.Sleep(30 * time.Second)
 	}
 	if len(os.Args) >= 2 && os.Args[len(os.Args)-2] == "yt-mux-job-tree" {

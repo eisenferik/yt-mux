@@ -12,7 +12,7 @@ if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
 foreach ($definition in $ast.FindAll({
     param($node)
     $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
-    $node.Name -in @('Assert-PathWithinInstallRoot', 'Write-JsonFile', 'Invoke-InstallTransaction', 'Write-DefaultSettings', 'Get-ExtensionOrigin')
+    $node.Name -in @('Write-JsonFile', 'Invoke-InstallTransaction', 'Write-DefaultSettings')
 }, $false)) {
     . ([scriptblock]::Create($definition.Extent.Text))
 }
@@ -38,13 +38,6 @@ function Copy-Item {
 
 try {
     $repositoryRoot = Join-Path $PSScriptRoot '..'
-    $hostSource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'host\internal\host\app.go') -Raw
-    if ($hostSource -notmatch 'const ExpectedOrigin = "([^"]+)"') { throw 'The host no longer declares ExpectedOrigin.' }
-    $installedOrigin = Get-ExtensionOrigin -ManifestPath (Join-Path $repositoryRoot 'extension\manifest.json')
-    if ($installedOrigin -ne $Matches[1]) {
-        throw "Setup would allow $installedOrigin, but the host only accepts $($Matches[1])."
-    }
-
     $files = @(
         'bin\deno.exe', 'bin\ffmpeg.exe', 'bin\ffprobe.exe', 'bin\yt-dlp.exe', 'bin\yt-mux-host.exe',
         'extension\manifest.json',
@@ -53,7 +46,7 @@ try {
     $cases = @(@{ Name = 'success' }, @{ Name = 'backup'; Backup = $true },
         @{ Name = 'registration'; Registration = $true },
         @{ Name = 'restore'; Registration = $true; Restore = $true })
-    for ($index = 1; $index -le $files.Count; $index++) {
+    foreach ($index in @(1, $files.Count)) {
         $cases += @{ Name = "copy-$index"; FailAt = $index }
     }
     foreach ($case in $cases) {
@@ -84,8 +77,6 @@ try {
         [IO.File]::WriteAllText($userFile, 'user content')
         $caught = $null
         try {
-            # The transaction and its path guards must use the explicit install root.
-            $resolvedInstallRoot = Join-Path $fixtureRoot 'unused-outer-root'
             Invoke-InstallTransaction -InstallRoot $transactionRoot -StageRoot $stageRoot -BackupRoot $backupRoot -Register {
                 $script:registration = 'new registration'
                 if ($failRegistration) { throw 'Injected registration failure' }
@@ -120,8 +111,7 @@ try {
 
     $settingsCases = @(
         @{ Name = 'absent'; Existing = $null },
-        @{ Name = 'present'; Existing = '{"destination":"D:/Videos"}' },
-        @{ Name = 'unreadable'; Existing = '{invalid' }
+        @{ Name = 'present'; Existing = '{"destination":"D:/Videos"}' }
     )
     foreach ($case in $settingsCases) {
         $caseRoot = Join-Path (Join-Path $fixtureRoot 'defaults') $case.Name

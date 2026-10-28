@@ -1,21 +1,16 @@
 import { sendNative } from "./native.js";
 import { SaveReply, saveOptionsSettings } from "./settings-save.js";
-import {
-  isPreset,
-  PROTOCOL_VERSION,
-  requestID,
-  Settings,
-} from "./protocol.js";
+import { PresetName, PROTOCOL_VERSION, requestID, Settings } from "./protocol.js";
 
-const form = requiredElement("settings-form", HTMLFormElement);
-const destination = requiredElement("destination", HTMLInputElement);
-const defaultPreset = requiredElement("default-preset", HTMLSelectElement);
-const subtitleLanguages = requiredElement("subtitle-languages", HTMLInputElement);
-const cookiesEnabled = requiredElement("cookies-enabled", HTMLInputElement);
-const notifications = requiredElement("notifications", HTMLInputElement);
-const saveButton = requiredElement("save-button", HTMLButtonElement);
-const browseButton = requiredElement("browse-button", HTMLButtonElement);
-const status = requiredElement("status", HTMLElement);
+const form = element<HTMLFormElement>("settings-form");
+const destination = element<HTMLInputElement>("destination");
+const defaultPreset = element<HTMLSelectElement>("default-preset");
+const subtitleLanguages = element<HTMLInputElement>("subtitle-languages");
+const cookiesEnabled = element<HTMLInputElement>("cookies-enabled");
+const notifications = element<HTMLInputElement>("notifications");
+const saveButton = element<HTMLButtonElement>("save-button");
+const browseButton = element<HTMLButtonElement>("browse-button");
+const status = element<HTMLElement>("status");
 const formControls = [
   destination,
   defaultPreset,
@@ -51,24 +46,15 @@ async function loadSettings(): Promise<void> {
     ready("Settings loaded.");
     return;
   }
-  if (message.type === "error") {
-    failed(message.detail ?? "Could not load settings.");
-    return;
-  }
-  failed("Native host returned an unexpected response.");
+  failed("Could not load settings.");
 }
 
 async function saveSettings(): Promise<void> {
-  const preset = defaultPreset.value;
-  if (!isPreset(preset)) {
-    failed("Choose a supported preset.");
-    return;
-  }
   const languages = subtitleLanguages.value.split(",").map((value) => value.trim()).filter(Boolean);
 
   const settings: Settings = {
     destination: destination.value.trim(),
-    defaultPreset: preset,
+    defaultPreset: defaultPreset.value as PresetName,
     subtitleLanguages: languages,
     cookiesEnabled: cookiesEnabled.checked,
     notifications: notifications.checked,
@@ -98,10 +84,10 @@ function saveFailureDetail(reply: SaveReply): string {
   if (reply.type === "error") {
     return reply.error;
   }
-  if (reply.message.type === "error") {
-    return reply.message.detail ?? "Could not save settings.";
-  }
-  return "Native host returned an unexpected response.";
+  const message = reply.message;
+  return message.type === "error" && message.kind === "INVALID_REQUEST" && message.detail
+    ? message.detail
+    : "Could not save settings.";
 }
 
 async function pickDestination(): Promise<void> {
@@ -128,11 +114,7 @@ async function pickDestination(): Promise<void> {
     ready("Folder selection cancelled.");
     return;
   }
-  if (message.type === "error") {
-    failed(message.detail ?? "Could not choose a folder.");
-    return;
-  }
-  failed("Native host returned an unexpected response.");
+  failed("Could not choose a folder.");
 }
 
 function busy(message: string): void {
@@ -155,13 +137,6 @@ function showStatus(message: string, disabled: boolean, error: boolean): void {
   status.classList.toggle("error", error);
 }
 
-function requiredElement<T extends HTMLElement>(id: string, expected: new () => T): T {
-  const element = document.getElementById(id);
-  if (!element) {
-    throw new Error(`Missing element: ${id}`);
-  }
-  if (!(element instanceof expected)) {
-    throw new Error(`Unexpected element type: ${id}`);
-  }
-  return element;
+function element<T extends HTMLElement>(id: string): T {
+  return document.getElementById(id) as T;
 }

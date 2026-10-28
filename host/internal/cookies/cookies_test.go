@@ -1,67 +1,65 @@
 package cookies
 
 import (
-	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
-func TestWriteNetscape(t *testing.T) {
-	cases := []struct {
-		name   string
-		cookie Cookie
-		line   string
-	}{
-		{"domain secure HTTPOnly", Cookie{Domain: ".youtube.com", Secure: true, HTTPOnly: true, ExpirationDate: 1234567890}, "#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t1234567890\tSID\tdummy\n"},
-		{"domain insecure", Cookie{Domain: ".youtube.com"}, ".youtube.com\tTRUE\t/\tFALSE\t0\tSID\tdummy\n"},
-		{"host secure", Cookie{Domain: "www.youtube.com", Secure: true}, "www.youtube.com\tFALSE\t/\tTRUE\t0\tSID\tdummy\n"},
-		{"host insecure", Cookie{Domain: "www.youtube.com"}, "www.youtube.com\tFALSE\t/\tFALSE\t0\tSID\tdummy\n"},
+func TestWriteFileWritesNetscapeCookies(t *testing.T) {
+	path, err := WriteFile(t.TempDir(), []Cookie{
+		{Domain: ".youtube.com", Name: "SID", Value: "dummy", Path: "/", Secure: true, HTTPOnly: true, ExpirationDate: 1234567890},
+		{Domain: "www.youtube.com", Name: "SID", Value: "dummy", Path: "/"},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			cookie := testCase.cookie
-			cookie.Name, cookie.Value, cookie.Path = "SID", "dummy", "/"
-			var output bytes.Buffer
-			if err := writeNetscape(&output, []Cookie{cookie}); err != nil {
-				t.Fatal(err)
-			}
-			if output.String() != netscapeHeader+testCase.line {
-				t.Fatalf("unexpected cookie output: %s", output.String())
-			}
-		})
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := netscapeHeader +
+		"#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t1234567890\tSID\tdummy\n" +
+		"www.youtube.com\tFALSE\t/\tFALSE\t0\tSID\tdummy\n"
+	if string(payload) != want {
+		t.Fatalf("unexpected cookie file: %s", payload)
 	}
 }
 
-func TestValidateRejectsUnsafeCookies(t *testing.T) {
-	cases := []struct {
-		cookie Cookie
-		want   string
+func TestCleanupStaleRemovesOnlyOldCookieFiles(t *testing.T) {
+	directory := t.TempDir()
+	now := time.Date(2026, 1, 2, 12, 0, 0, 0, time.UTC)
+	cookieName := func(digit string) string { return "cookies-" + strings.Repeat(digit, 32) + ".txt" }
+	entries := []struct {
+		name    string
+		age     time.Duration
+		removed bool
 	}{
-		{Cookie{Domain: ".evil.example", Name: "SID", Value: "x", Path: "/"}, "disallowed domain"},
-		{Cookie{Domain: "github.com\tTRUE\t/\tFALSE\t0\tx\n.youtube.com", Name: "SID", Value: "x", Path: "/"}, "disallowed domain"},
-		{Cookie{Domain: ".youtube.com", Name: "bad\tname", Value: "x", Path: "/"}, "invalid name"},
-		{Cookie{Domain: ".youtube.com", Name: "SID", Value: "line\nbreak", Path: "/"}, "invalid value"},
-		{Cookie{Domain: ".youtube.com", Name: "SID", Value: "x", Path: "relative"}, "invalid path"},
-		{Cookie{Domain: ".youtube.com", Name: "SID", Value: "x", Path: "/", ExpirationDate: -1}, "invalid expiration"},
+		{cookieName("a"), 25 * time.Hour, true},
+		{cookieName("b"), time.Hour, false},
+		{cookieName("c"), 24 * time.Hour, false},
 	}
-	for _, testCase := range cases {
-		err := Validate([]Cookie{testCase.cookie})
-		if err == nil || !strings.Contains(err.Error(), testCase.want) {
-			t.Errorf("expected %q for %#v, got %v", testCase.want, testCase.cookie, err)
+	for _, entry := range entries {
+		path := filepath.Join(directory, entry.name)
+		if err := os.WriteFile(path, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		modified := now.Add(-entry.age)
+		if err := os.Chtimes(path, modified, modified); err != nil {
+			t.Fatal(err)
 		}
 	}
-}
 
-func TestNormalizeDomainKeepsTheDomainsChromeReports(t *testing.T) {
-	cases := []string{"youtube.com", ".youtube.com", "www.youtube.com", "google.com", ".google.com", "accounts.google.com"}
-	for _, domain := range cases {
-		normalized, ok := normalizeDomain(strings.ToUpper(domain))
-		if !ok {
-			t.Errorf("expected %q to be accepted", domain)
-			continue
-		}
-		if normalized != domain {
-			t.Errorf("expected %q, got %q", domain, normalized)
+	if err := CleanupStale(directory, now); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, entry := range entries {
+		_, err := os.Stat(filepath.Join(directory, entry.name))
+		if removed := os.IsNotExist(err); removed != entry.removed {
+			t.Errorf("%s: removed = %v, want %v (stat error %v)", entry.name, removed, entry.removed, err)
 		}
 	}
 }

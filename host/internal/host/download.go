@@ -30,7 +30,7 @@ func (a *App) download(
 ) (nativeResponse, error) {
 	cookiePath := ""
 	if len(cookieItems) > 0 {
-		path, err := cookies.CreateSecure(a.temporaryDir, cookieItems)
+		path, err := cookies.WriteFile(a.temporaryDir, cookieItems)
 		if err != nil {
 			return newError(id, ErrorKindCookieFileFailed, ""), nil
 		}
@@ -49,34 +49,34 @@ func (a *App) download(
 	if streamErr != nil {
 		return nil, fmt.Errorf("write native progress: %w", streamErr)
 	}
-	return result.outcome(id, cookiePath != "", outputTail), nil
+	return result.outcome(id, outputTail), nil
 }
 
 type childLine struct {
 	text   string
 	stdout bool
-	err    error
 }
 
 type processResult struct {
-	finalPath    string
-	waitErr      error
-	cancelled    bool
-	outputFailed bool
+	finalPath string
+	waitErr   error
+	cancelled bool
 }
 
-func (r processResult) outcome(id string, cookiesUsed bool, outputTail *tail.Buffer) nativeResponse {
+func (r processResult) outcome(id string, outputTail *tail.Buffer) nativeResponse {
 	switch {
 	case r.cancelled:
 		return newError(id, ErrorKindCancelled, "")
-	case r.outputFailed:
-		return newError(id, ErrorKindProcessOutputFailed, "")
 	case r.waitErr != nil:
 		analysis := ytdlp.AnalyzeFailure(outputTail.Lines())
-		if !cookiesUsed && analysis.LoginRequired {
+		switch analysis.Reason {
+		case ytdlp.FailureLoginRequired:
 			return newError(id, ErrorKindYTDLPLoginRequired, "")
+		case ytdlp.FailureMembersOnly:
+			return newError(id, ErrorKindYTDLPMembersOnly, "")
+		default:
+			return newError(id, ErrorKindYTDLPFailed, analysis.Diagnostic)
 		}
-		return newError(id, ErrorKindYTDLPFailed, analysis.Diagnostic)
 	case r.finalPath == "":
 		return newError(id, ErrorKindMissingOutputPath, "")
 	default:
@@ -115,13 +115,6 @@ func (a *App) monitorProcess(ctx context.Context, id string, process *job.Proces
 		case line, ok := <-lines:
 			if !ok {
 				lines = nil
-				continue
-			}
-			if line.err != nil {
-				if !result.outputFailed {
-					result.outputFailed = true
-					_ = process.Terminate()
-				}
 				continue
 			}
 			if status, ok := ytdlp.ParsePostprocess(line.text); ok {
@@ -171,8 +164,5 @@ func scanLines(reader io.Reader, stdout bool, output chan<- childLine, group *sy
 	scanner.Buffer(make([]byte, 64*1024), childLineBufferLimit)
 	for scanner.Scan() {
 		output <- childLine{text: strings.TrimSuffix(scanner.Text(), "\r"), stdout: stdout}
-	}
-	if err := scanner.Err(); err != nil {
-		output <- childLine{stdout: stdout, err: err}
 	}
 }

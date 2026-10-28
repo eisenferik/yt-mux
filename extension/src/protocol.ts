@@ -4,8 +4,6 @@ export const PROTOCOL_VERSION = 1 as const;
 export const PRESET_NAMES = ["archive", "archive-vp9", "compat-mp4"] as const;
 export type PresetName = (typeof PRESET_NAMES)[number];
 
-const presetNameSet = new Set<string>(PRESET_NAMES);
-
 export const ERROR_KINDS = [
   "CANCELLED",
   "INVALID_REQUEST",
@@ -13,10 +11,10 @@ export const ERROR_KINDS = [
   "DESTINATION_PICK_FAILED",
   "COOKIE_FILE_FAILED",
   "PROCESS_START_FAILED",
-  "PROCESS_OUTPUT_FAILED",
   "MISSING_OUTPUT_PATH",
   "YTDLP_FAILED",
   "YTDLP_LOGIN_REQUIRED",
+  "YTDLP_MEMBERS_ONLY",
 ] as const;
 export type ErrorKind = (typeof ERROR_KINDS)[number];
 
@@ -135,8 +133,4 @@ export function postRequest(port: chrome.runtime.Port, request: NativeRequest): 
 
 export function requestID(): string {
   return crypto.randomUUID().replaceAll("-", "");
-}
-
-export function isPreset(value: string): value is PresetName {
-  return presetNameSet.has(value);
 }

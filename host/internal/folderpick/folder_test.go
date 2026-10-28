@@ -1,7 +1,6 @@
 package folderpick
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -26,23 +25,5 @@ func TestUsableFolderRejectsRelativeAndEmpty(t *testing.T) {
 		if got := usableFolder(path); got != "" {
 			t.Fatalf("expected empty for %q, got %q", path, got)
 		}
-	}
-}
-
-func TestValidResultRejectsFiles(t *testing.T) {
-	root := t.TempDir()
-	file := filepath.Join(root, "file.txt")
-	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := validResult(file); err == nil {
-		t.Fatal("expected a file to be rejected")
-	}
-	path, err := validResult(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if path != root {
-		t.Fatalf("got %q, want %q", path, root)
 	}
 }

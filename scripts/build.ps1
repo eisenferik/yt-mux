@@ -24,11 +24,6 @@ try {
 }
 
 if (Test-Path -LiteralPath $distributionRoot) {
-    $resolvedDistribution = [System.IO.Path]::GetFullPath($distributionRoot)
-    $resolvedRepository = $repositoryRoot.TrimEnd('\') + '\'
-    if (-not $resolvedDistribution.StartsWith($resolvedRepository, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing to clean an output path outside the repository: $resolvedDistribution"
-    }
     Remove-Item -LiteralPath $distributionRoot -Recurse -Force
 }
 New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null

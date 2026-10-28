@@ -59,17 +59,12 @@ export function installChromeStub() {
     badges: [],
     permissionGranted: true,
     permissionRequestGranted: undefined,
-    permissionRequestThrows: false,
     permissionRequests: 0,
     permissionRemovals: 0,
-    permissionCheckRejects: false,
-    cookieReadRejects: false,
     pendingContains: null,
     pendingPermission: null,
     badgeGate: null,
     cookies: [],
-    connectNativeThrows: false,
-    postMessageThrows: null,
   };
   const listeners = {};
   currentListeners = listeners;
@@ -106,7 +101,7 @@ export function installChromeStub() {
           disconnect() {
             if (disconnected) return;
             disconnected = true;
-            queueMicrotask(() => endpoints.forEach((endpoint) => endpoint.disconnects.forEach((handler) => handler())));
+            queueMicrotask(() => endpoints[1 - index].disconnects.forEach((handler) => handler()));
           },
         }));
         listeners.connect?.(ports[1]);
@@ -114,9 +109,6 @@ export function installChromeStub() {
         return ports[0];
       },
       connectNative() {
-        if (state.connectNativeThrows) {
-          throw new Error("Native host unavailable");
-        }
         const port = {
           messages: [],
           disconnected: false,
@@ -133,7 +125,6 @@ export function installChromeStub() {
             },
           },
           postMessage(message) {
-            if (state.postMessageThrows === message.type) throw new Error("Could not send request");
             recordRequestShape(message);
             port.messages.push(message);
           },
@@ -160,9 +151,6 @@ export function installChromeStub() {
     },
     permissions: {
       contains(_permission) {
-        if (state.permissionCheckRejects) {
-          return Promise.reject(new Error("Permission is not declared in the manifest"));
-        }
         if (state.pendingContains) {
           return new Promise((resolve) => state.pendingContains.push(resolve));
         }
@@ -170,9 +158,6 @@ export function installChromeStub() {
       },
       request(_permission) {
         state.permissionRequests += 1;
-        if (state.permissionRequestThrows) {
-          throw new Error("This function must be called during a user gesture");
-        }
         if (state.pendingPermission) {
           return new Promise((resolve) => {
             state.pendingPermission.push((granted) => {
@@ -192,11 +177,9 @@ export function installChromeStub() {
       },
     },
     cookies: {
-      getAll(_query) {
-        if (state.cookieReadRejects) {
-          return Promise.reject(new Error("cookie read failed"));
-        }
-        return Promise.resolve(state.cookies);
+      getAll({ domain }) {
+        const host = (cookie) => cookie.domain.replace(/^\./, "");
+        return Promise.resolve(state.cookies.filter((cookie) => host(cookie) === domain || host(cookie).endsWith(`.${domain}`)));
       },
     },
     tabs: {
@@ -221,23 +204,18 @@ export async function loadOptions() {
 }
 
 export function installOptionsDocument() {
-  globalThis.HTMLElement = FakeHTMLElement;
-  globalThis.HTMLFormElement = FakeHTMLFormElement;
-  globalThis.HTMLInputElement = FakeHTMLInputElement;
-  globalThis.HTMLSelectElement = FakeHTMLSelectElement;
-  globalThis.HTMLButtonElement = FakeHTMLButtonElement;
-
-  const elements = new Map(Object.entries({
-    "settings-form": new FakeHTMLFormElement(),
-    destination: new FakeHTMLInputElement(),
-    "default-preset": new FakeHTMLSelectElement(),
-    "subtitle-languages": new FakeHTMLInputElement(),
-    "cookies-enabled": new FakeHTMLInputElement(),
-    notifications: new FakeHTMLInputElement(),
-    "save-button": new FakeHTMLButtonElement(),
-    "browse-button": new FakeHTMLButtonElement(),
-    status: new FakeHTMLElement(),
-  }));
+  const ids = [
+    "settings-form",
+    "destination",
+    "default-preset",
+    "subtitle-languages",
+    "cookies-enabled",
+    "notifications",
+    "save-button",
+    "browse-button",
+    "status",
+  ];
+  const elements = new Map(ids.map((id) => [id, new FakeHTMLElement()]));
   globalThis.document = {
     getElementById(id) {
       return elements.get(id) ?? null;
@@ -265,11 +243,6 @@ class FakeHTMLElement {
     handler?.({ preventDefault() {} });
   }
 }
-
-class FakeHTMLFormElement extends FakeHTMLElement {}
-class FakeHTMLInputElement extends FakeHTMLElement {}
-class FakeHTMLSelectElement extends FakeHTMLElement {}
-class FakeHTMLButtonElement extends FakeHTMLElement {}
 
 export const settingsReply = (id, overrides = {}) => ({
   v: 1,

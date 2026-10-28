@@ -63,16 +63,12 @@ function Get-SetupDirectories {
     param([Parameter(Mandatory)][string] $Path)
     $temporaryDirectory = Join-Path $Path 'tmp'
     if (-not (Test-Path -LiteralPath $temporaryDirectory -PathType Container)) { return @() }
-    if ((Get-Item -LiteralPath $temporaryDirectory -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { return @() }
-    return @(Get-ChildItem -LiteralPath $temporaryDirectory -Directory -Force | Where-Object {
-        $_.Name -cmatch '^setup-[0-9a-f]{32}$' -and -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint)
-    })
+    return @(Get-ChildItem -LiteralPath $temporaryDirectory -Directory -Force | Where-Object { $_.Name -cmatch '^setup-[0-9a-f]{32}$' })
 }
 
 function Test-UninstallMarker {
     param([Parameter(Mandatory)][string] $Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
-    if ((Get-Item -LiteralPath $Path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { return $false }
     return ([IO.File]::ReadAllText($Path) -eq $uninstallMarkerText)
 }
 
@@ -112,31 +108,13 @@ function Remove-InstalledFiles {
     }
     $rootPath = Get-NormalizedPath -Path $Root
     if (-not (Test-Path -LiteralPath $rootPath -PathType Container)) { return }
-    if ((Get-Item -LiteralPath $rootPath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { return }
     # Keep identity after the normal installation markers have been deleted.
     $uninstallMarker = Join-Path $rootPath '.yt-mux-uninstalling'
-    if (Test-Path -LiteralPath $uninstallMarker) {
-        if (-not (Test-UninstallMarker -Path $uninstallMarker)) {
-            throw "Refusing to overwrite an unrecognized uninstall marker: $uninstallMarker"
-        }
-    } else {
-        [IO.File]::WriteAllText($uninstallMarker, $uninstallMarkerText)
-    }
+    [IO.File]::WriteAllText($uninstallMarker, $uninstallMarkerText)
     $directories = @()
     foreach ($relative in $applicationFiles.Keys) {
         $directory = Join-Path $rootPath $relative
         if (-not (Test-Path -LiteralPath $directory -PathType Container)) {
-            continue
-        }
-        # A junction here would let deletion escape the install root.
-        $linked = $false
-        for ($ancestor = $directory; $ancestor.Length -ge $rootPath.Length; $ancestor = Split-Path -Parent $ancestor) {
-            if ((Get-Item -LiteralPath $ancestor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
-                $linked = $true
-                break
-            }
-        }
-        if ($linked) {
             continue
         }
         $directories += $directory
@@ -156,18 +134,9 @@ function Remove-InstalledFiles {
                 $pending.Push($setup.FullName)
             }
             while ($pending.Count -gt 0) {
-                $setupPath = Get-NormalizedPath -Path $pending.Pop()
-                if (-not $setupPath.StartsWith($directory + '\', [StringComparison]::OrdinalIgnoreCase)) {
-                    throw 'Unexpected setup directory path.'
-                }
-                if ((Get-Item -LiteralPath $setupPath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
-                    continue
-                }
+                $setupPath = $pending.Pop()
                 $directories += $setupPath
                 foreach ($entry in Get-ChildItem -LiteralPath $setupPath -Force) {
-                    if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-                        continue
-                    }
                     if ($entry.PSIsContainer) {
                         $pending.Push($entry.FullName)
                     } else {
@@ -236,7 +205,7 @@ if (Test-Path -LiteralPath $installedHost -PathType Leaf) {
         )
         $hostProbe.Dispose()
     } catch {
-        throw 'The installed yt-mux host is in use. Finish or cancel the active operation, close the browser, and run uninstall again.'
+        throw 'The installed yt-mux host is in use. Close the browser and run uninstall again.'
     }
 }
 

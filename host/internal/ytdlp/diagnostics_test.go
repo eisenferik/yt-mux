@@ -2,29 +2,19 @@ package ytdlp
 
 import "testing"
 
-func TestAnalyzeFailureRecognizesLoginMarkers(t *testing.T) {
-	positives := []string{
-		"ERROR: [youtube] abc: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication.",
-		"ERROR: [youtube] abc: Sign in to confirm your age. This video may be inappropriate for some users.",
-		"ERROR: [youtube] abc: This video is available to this channel's members. Join this channel to get access to members-only content.",
-		"WARNING: [youtube] abc: Login required",
-		"ERROR: requested format is unavailable; age-restricted video",
+func TestAnalyzeFailureNamesTheReason(t *testing.T) {
+	cases := []struct {
+		line string
+		want FailureReason
+	}{
+		{"ERROR: [youtube] abc: Sign in to confirm your age. This video may be inappropriate for some users.", FailureLoginRequired},
+		{"ERROR: [youtube] abc: This video is available to this channel's members on level: Members Plus (or any higher level). Join this channel to get access to members-only content and other exclusive perks.", FailureMembersOnly},
+		{"ERROR: [youtube] abc: Requested format is not available", FailureOther},
+		{"[download] Destination: C:\\Videos\\Sign in to my channel.mkv", FailureOther},
 	}
-	for _, line := range positives {
-		if !AnalyzeFailure([]string{line}).LoginRequired {
-			t.Errorf("expected login required: %q", line)
-		}
-	}
-
-	negatives := []string{
-		"ERROR: [youtube] abc: Requested format is not available",
-		"[download] Destination: C:\\Videos\\Sign in to my channel.mkv",
-		"ERROR: unable to extract yt initial player response",
-		"WARNING: nsig extraction failed",
-	}
-	for _, line := range negatives {
-		if AnalyzeFailure([]string{line}).LoginRequired {
-			t.Errorf("did not expect login required: %q", line)
+	for _, testCase := range cases {
+		if got := AnalyzeFailure([]string{testCase.line}).Reason; got != testCase.want {
+			t.Errorf("%q: got %d, want %d", testCase.line, got, testCase.want)
 		}
 	}
 }
@@ -48,12 +38,5 @@ func TestAnalyzeFailureDiagnosticFallsBackToTheLastLine(t *testing.T) {
 	}
 	if got := AnalyzeFailure(lines).Diagnostic; got != lines[1] {
 		t.Errorf("expected the last line, got %q", got)
-	}
-}
-
-func TestAnalyzeFailureWithoutOutput(t *testing.T) {
-	analysis := AnalyzeFailure(nil)
-	if analysis.Diagnostic != "" || analysis.LoginRequired {
-		t.Errorf("expected an empty analysis, got %+v", analysis)
 	}
 }

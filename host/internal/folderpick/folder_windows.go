@@ -149,11 +149,7 @@ func Pick(start string) (string, bool, error) {
 	}
 	defer windows.CoTaskMemFree(unsafe.Pointer(name))
 
-	path, err := validResult(windows.UTF16PtrToString(name))
-	if err != nil {
-		return "", false, err
-	}
-	return path, false, nil
+	return windows.UTF16PtrToString(name), false, nil
 }
 
 func shellItemFromPath(path string) (*iShellItem, error) {

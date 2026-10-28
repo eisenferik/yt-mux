@@ -43,7 +43,7 @@ if ($isUpdate) {
         )
         $hostProbe.Dispose()
     } catch {
-        throw 'The installed yt-mux host is in use. Finish or cancel the active operation, close the browser, and run setup again.'
+        throw 'The installed yt-mux host is in use. Close the browser and run setup again.'
     }
     Write-Host 'Updating the existing yt-mux installation...'
 } else {
@@ -54,24 +54,11 @@ $setupID = [Guid]::NewGuid().ToString('N')
 $workDirectory = Join-Path $temporaryDirectory "setup-$setupID"
 New-Item -ItemType Directory -Path $workDirectory -Force | Out-Null
 
-function Assert-PathWithinInstallRoot {
-    param(
-        [Parameter(Mandatory)][string] $Path,
-        [Parameter(Mandatory)][string] $Root
-    )
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    $rootWithSeparator = $Root.TrimEnd('\') + '\'
-    if (-not $fullPath.StartsWith($rootWithSeparator, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing to modify a path outside the yt-mux install directory: $fullPath"
-    }
-}
-
 function Save-VerifiedAsset {
     param(
         [Parameter(Mandatory)] $Definition,
         [Parameter(Mandatory)][string] $OutputPath
     )
-    Assert-PathWithinInstallRoot -Path $OutputPath -Root $resolvedInstallRoot
     Write-Host "Downloading $($Definition.asset) ($($Definition.version))..."
     # Invoke-WebRequest slows down whenever it shows progress; curl shows it at full speed.
     $curl = Join-Path $env:SystemRoot 'System32\curl.exe'
@@ -152,9 +139,6 @@ function Save-RuntimesToStage {
     New-Item -ItemType Directory -Path $denoExtract -Force | Out-Null
     Expand-Archive -LiteralPath $denoDownload -DestinationPath $denoExtract -Force
     $denoExecutable = Get-ChildItem -LiteralPath $denoExtract -Filter 'deno.exe' -File -Recurse | Select-Object -First 1
-    if ($null -eq $denoExecutable) {
-        throw "The verified Deno archive did not contain deno.exe."
-    }
     Move-Item -LiteralPath $denoExecutable.FullName -Destination (Join-Path $BinDirectory 'deno.exe') -Force
 
     $ffmpegDownload = Join-Path $WorkDirectory $Lock.dependencies.ffmpeg.asset
@@ -164,9 +148,6 @@ function Save-RuntimesToStage {
     Expand-Archive -LiteralPath $ffmpegDownload -DestinationPath $ffmpegExtract -Force
     foreach ($executableName in @('ffmpeg.exe', 'ffprobe.exe')) {
         $executable = Get-ChildItem -LiteralPath $ffmpegExtract -Filter $executableName -File -Recurse | Select-Object -First 1
-        if ($null -eq $executable) {
-            throw "The verified FFmpeg archive did not contain $executableName."
-        }
         Move-Item -LiteralPath $executable.FullName -Destination (Join-Path $BinDirectory $executableName) -Force
     }
 }
@@ -184,11 +165,6 @@ function Invoke-InstallTransaction {
         $relative = $file.FullName.Substring($StageRoot.Length + 1)
         $target = Join-Path $InstallRoot $relative
         $backup = Join-Path $BackupRoot $relative
-        Assert-PathWithinInstallRoot -Path $target -Root $InstallRoot
-        Assert-PathWithinInstallRoot -Path $backup -Root $InstallRoot
-        if (Test-Path -LiteralPath $target -PathType Container) {
-            throw "An installation file is occupied by a directory: $target"
-        }
         $existed = Test-Path -LiteralPath $target -PathType Leaf
         if ($existed) {
             New-Item -ItemType Directory -Path (Split-Path -Parent $backup) -Force | Out-Null
@@ -220,7 +196,6 @@ function Invoke-InstallTransaction {
                 if ($entry.Existed) {
                     Copy-Item -LiteralPath $entry.Backup -Destination $entry.Target -Force
                 } elseif (Test-Path -LiteralPath $entry.Target) {
-                    Assert-PathWithinInstallRoot -Path $entry.Target -Root $InstallRoot
                     Remove-Item -LiteralPath $entry.Target -Force
                 }
             } catch { $restoreFailures.Add($_.Exception.Message) }
@@ -237,9 +212,6 @@ function Invoke-InstallTransaction {
 $preserveSetup = $false
 try {
     $lock = Get-Content -LiteralPath $dependencyDefinition -Raw | ConvertFrom-Json
-    if ($lock.schemaVersion -ne 1) {
-        throw "Unsupported dependency definition version."
-    }
 
     $stageRoot = Join-Path $workDirectory 'stage'
     foreach ($name in @('bin', 'extension', 'config', 'native')) {
@@ -315,7 +287,6 @@ try {
     throw
 } finally {
     if (-not $preserveSetup -and (Test-Path -LiteralPath $workDirectory)) {
-        Assert-PathWithinInstallRoot -Path $workDirectory -Root $resolvedInstallRoot
         try { Remove-Item -LiteralPath $workDirectory -Recurse -Force } catch {
             Write-Warning "Could not remove setup temporary files at ${workDirectory}: $($_.Exception.Message)"
         }

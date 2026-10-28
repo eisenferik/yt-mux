@@ -13,8 +13,6 @@ import (
 	"github.com/eisenferik/yt-mux/host/internal/protocol"
 )
 
-const ExpectedOrigin = "chrome-extension://nkdpdpbaoogfjijkpbmfaplddhbjmfop/"
-
 type App struct {
 	binDirectory string
 	settingsPath string
@@ -30,7 +28,6 @@ type readResult struct {
 }
 
 type operation struct {
-	id     string
 	cancel context.CancelFunc
 	done   <-chan operationResult
 }
@@ -41,7 +38,6 @@ type operationResult struct {
 }
 
 type operationPlan struct {
-	id  string
 	run func(context.Context) (nativeResponse, error)
 }
 
@@ -52,7 +48,7 @@ func (p *operationPlan) start() *operation {
 		message, err := p.run(operationContext)
 		done <- operationResult{message: message, err: err}
 	}()
-	return &operation{id: p.id, cancel: cancel, done: done}
+	return &operation{cancel: cancel, done: done}
 }
 
 func New(installRoot string, input io.Reader, output, logOutput io.Writer) *App {

@@ -1,4 +1,4 @@
-export type CookieAccess = "granted" | "denied" | "unreadable";
+export type CookieAccess = "granted" | "denied";
 
 export const COOKIE_PERMISSION: chrome.permissions.Permissions = {
   permissions: ["cookies"],
@@ -16,26 +16,14 @@ export interface CookieGrant {
 }
 
 export async function checkCookiePermission(): Promise<CookieAccess> {
-  try {
-    return (await chrome.permissions.contains(COOKIE_PERMISSION)) ? "granted" : "denied";
-  } catch {
-    return "unreadable";
-  }
-}
-
-async function requestCookiePermission(): Promise<boolean> {
-  try {
-    return await chrome.permissions.request(COOKIE_PERMISSION);
-  } catch {
-    return false;
-  }
+  return (await chrome.permissions.contains(COOKIE_PERMISSION)) ? "granted" : "denied";
 }
 
 // Chrome only honours a permission request from the user-gesture call stack, so
 // both checks have to be started before either one is awaited.
 export async function grantCookiePermission(): Promise<CookieGrant> {
   const present = checkCookiePermission();
-  const requested = requestCookiePermission();
+  const requested = chrome.permissions.request(COOKIE_PERMISSION);
   const [access, granted] = await Promise.all([present, requested]);
   return { granted, newlyGranted: granted && access === "denied" };
 }

@@ -26,11 +26,7 @@ export function saveOptionsSettings(settings: Settings): Promise<SaveReply> {
     // An idle runtime port alone does not keep an MV3 worker alive. Maintain
     // this in-progress transaction while the user considers the permission prompt.
     const keepAlive = setInterval(() => {
-      try {
-        port.postMessage({ type: "pending" } satisfies SaveChannelMessage);
-      } catch (error) {
-        settle({ type: "error", error: failureDetail(error) });
-      }
+      port.postMessage({ type: "pending" } satisfies SaveChannelMessage);
     }, 20_000);
     const settle = (reply: SaveReply): void => {
       settled = true;
@@ -38,16 +34,8 @@ export function saveOptionsSettings(settings: Settings): Promise<SaveReply> {
       resolve(reply);
       port.disconnect();
     };
-    port.onMessage.addListener((reply: SaveReply) => {
-      if (settled) {
-        return;
-      }
-      settle(reply);
-    });
+    port.onMessage.addListener(settle);
     port.onDisconnect.addListener(() => {
-      if (settled) {
-        return;
-      }
       settle({
         type: "error",
         error: chrome.runtime.lastError?.message ?? "Settings service disconnected.",
@@ -57,11 +45,7 @@ export function saveOptionsSettings(settings: Settings): Promise<SaveReply> {
       if (settled) {
         return;
       }
-      try {
-        port.postMessage({ type: "save", settings, grant: result } satisfies SaveChannelMessage);
-      } catch (error) {
-        settle({ type: "error", error: failureDetail(error) });
-      }
+      port.postMessage({ type: "save", settings, grant: result } satisfies SaveChannelMessage);
     });
   });
 }
@@ -82,9 +66,6 @@ export function handleSettingsSaves(state: CookieState): void {
     });
     port.onMessage.addListener((request: SaveChannelMessage) => {
       if (request.type !== "save") {
-        return;
-      }
-      if (received || closed) {
         return;
       }
       received = true;
@@ -135,9 +116,5 @@ function saveResult(cookiesEnabled: boolean, sent: NativeResult): CookieSaveResu
     }
     return cookiesEnabled ? "enabled" : "disabled";
   }
-  return sent.type === "disconnected" && cookiesEnabled ? "enabled" : "unchanged";
-}
-
-function failureDetail(error: unknown): string {
-  return error instanceof Error ? error.message : "Could not communicate with the settings service.";
+  return cookiesEnabled ? "enabled" : "unchanged";
 }
