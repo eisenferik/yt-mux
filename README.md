@@ -1,12 +1,11 @@
 # yt-mux
 
-yt-mux is not a download manager that happens to live in the browser. It is one
-action with no life of its own: no GUI, tray process, local server, queue, or
-injected page control, and no native process while idle.
+One shortcut saves the YouTube video in the active tab at the best quality
+YouTube offers, without re-encoding it. Nothing runs while you are not using it.
 
-Its one action, for YouTube on Windows 11 in a Chromium-based browser,
-saves the active video at the best quality offered by YouTube
-without re-encoding it.
+yt-mux is not a download manager that happens to live in the browser: no GUI,
+tray process, local server, queue, or injected page control. It works for
+YouTube on Windows 11 in a Chromium-based browser.
 
 The toolbar action or the default `Alt+Shift+D` shortcut starts a download.
 Click the toolbar action again to cancel it. Right-click the action to choose a
@@ -17,20 +16,19 @@ shortcuts page, such as `chrome://extensions/shortcuts`.
 
 - Windows 11 x64
 - A Chromium-based browser built on Chromium 116 or later
-- PowerShell 7 or Windows PowerShell 5.1 for setup
 
 ## Install
 
-1. Download and extract the release zip.
-2. Open PowerShell in the extracted release directory and run:
+1. Run in PowerShell:
 
    ```powershell
-   .\setup\install.ps1
+   & ([scriptblock]::Create((irm https://github.com/eisenferik/yt-mux/releases/latest/download/update.ps1)))
    ```
 
-3. Open the browser's extensions page, such as `chrome://extensions`, enable
-   Developer mode, choose **Load unpacked**, and select `%LOCALAPPDATA%\yt-mux\extension`.
-4. Open a YouTube video and click the yt-mux toolbar action.
+2. Open the browser's extensions page, such as `chrome://extensions`, enable
+   Developer mode, choose **Load unpacked**, and paste the copied folder path,
+   `%LOCALAPPDATA%\yt-mux\extension`.
+3. Open a YouTube video and click the yt-mux toolbar action.
 
 Downloads are saved to the Windows Videos folder under `yt-mux` by default.
 Subtitles are not saved unless you choose languages. To change the
@@ -45,10 +43,10 @@ access is not required.
 
 ## Update
 
-Download and extract the new release. Finish or cancel any
-active download, close the browser, then run `.\setup\install.ps1` from the new
-release directory. Settings are preserved and the extension does not need to be
-loaded again.
+When YouTube changes in a way the installed version cannot handle, the failure
+notification says so; click it to update. To update at any other time, finish
+or cancel any active download, then run the install command again. Settings are
+preserved.
 
 If an update fails, setup attempts to restore the previous installation.
 
@@ -57,7 +55,7 @@ If an update fails, setup attempts to restore the previous installation.
 Finish or cancel any active download, close the browser, then run:
 
 ```powershell
-& "$env:LOCALAPPDATA\yt-mux\uninstall.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\yt-mux\uninstall.ps1"
 ```
 
 Remove the unpacked yt-mux extension on the browser's extensions page.

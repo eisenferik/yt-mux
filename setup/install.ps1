@@ -43,9 +43,9 @@ if ($isUpdate) {
         )
         $hostProbe.Dispose()
     } catch {
-        throw 'The installed yt-mux host is in use. Close the browser and run setup again.'
+        throw 'yt-mux is in the middle of a download. Finish or cancel it, then try again.'
     }
-    Write-Host 'Updating the existing yt-mux installation...'
+    Write-Host 'Updating yt-mux...'
 } else {
     Write-Host 'Installing yt-mux...'
 }
@@ -59,22 +59,21 @@ function Save-VerifiedAsset {
         [Parameter(Mandatory)] $Definition,
         [Parameter(Mandatory)][string] $OutputPath
     )
-    Write-Host "Downloading $($Definition.asset) ($($Definition.version))..."
     # Invoke-WebRequest slows down whenever it shows progress; curl shows it at full speed.
     $curl = Join-Path $env:SystemRoot 'System32\curl.exe'
     & {
         # Windows PowerShell may surface curl's progress on stderr as errors.
         $ErrorActionPreference = 'Continue'
-        $null = & $curl --fail --location --output $OutputPath $Definition.url
+        $null = & $curl --fail --location --progress-bar --output $OutputPath $Definition.url
     }
     if ($LASTEXITCODE -ne 0) {
-        throw "Downloading $($Definition.asset) failed (curl exit code $LASTEXITCODE)."
+        throw 'A download failed. Check the network connection and try again.'
     }
     $actualHash = (Get-FileHash -LiteralPath $OutputPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $expectedHash = ([string] $Definition.sha256).ToLowerInvariant()
     if ($actualHash -ne $expectedHash) {
         Remove-Item -LiteralPath $OutputPath -Force
-        throw "SHA-256 verification failed for $($Definition.asset)."
+        throw 'A downloaded file is not the one yt-mux expects. Try again later.'
     }
 }
 
@@ -130,10 +129,12 @@ function Save-RuntimesToStage {
     )
 
     $ytDlpDownload = Join-Path $WorkDirectory $Lock.dependencies.ytDlp.asset
+    Write-Host 'Downloading yt-dlp (1/3)...'
     Save-VerifiedAsset -Definition $Lock.dependencies.ytDlp -OutputPath $ytDlpDownload
     Move-Item -LiteralPath $ytDlpDownload -Destination (Join-Path $BinDirectory 'yt-dlp.exe') -Force
 
     $denoDownload = Join-Path $WorkDirectory $Lock.dependencies.deno.asset
+    Write-Host 'Downloading Deno (2/3)...'
     Save-VerifiedAsset -Definition $Lock.dependencies.deno -OutputPath $denoDownload
     $denoExtract = Join-Path $WorkDirectory 'deno'
     New-Item -ItemType Directory -Path $denoExtract -Force | Out-Null
@@ -142,7 +143,9 @@ function Save-RuntimesToStage {
     Move-Item -LiteralPath $denoExecutable.FullName -Destination (Join-Path $BinDirectory 'deno.exe') -Force
 
     $ffmpegDownload = Join-Path $WorkDirectory $Lock.dependencies.ffmpeg.asset
+    Write-Host 'Downloading FFmpeg (3/3)...'
     Save-VerifiedAsset -Definition $Lock.dependencies.ffmpeg -OutputPath $ffmpegDownload
+    Write-Host 'Finishing...'
     $ffmpegExtract = Join-Path $WorkDirectory 'ffmpeg'
     New-Item -ItemType Directory -Path $ffmpegExtract -Force | Out-Null
     Expand-Archive -LiteralPath $ffmpegDownload -DestinationPath $ffmpegExtract -Force
@@ -201,11 +204,11 @@ function Invoke-InstallTransaction {
             } catch { $restoreFailures.Add($_.Exception.Message) }
         }
         if ($restoreFailures.Count -gt 0) {
-            $failure = [System.Exception]::new("Setup failed: $($installFailure.Exception.Message) Rollback was incomplete. Recovery files are retained at $(Split-Path -Parent $BackupRoot). Restore errors: $($restoreFailures -join '; ')", $installFailure.Exception)
+            $failure = [System.Exception]::new("Setup could not finish or undo its changes. Run the install command again.`n$($installFailure.Exception.Message)", $installFailure.Exception)
             $failure.Data['PreserveSetup'] = $true
             throw $failure
         }
-        throw $installFailure
+        throw [System.Exception]::new("Setup could not finish and undid its changes. Run the install command again.`n$($installFailure.Exception.Message)", $installFailure.Exception)
     }
 }
 
@@ -219,7 +222,9 @@ try {
     }
     Save-RuntimesToStage -Lock $lock -WorkDirectory $workDirectory -BinDirectory (Join-Path $stageRoot 'bin')
     Copy-Item -LiteralPath $hostSource -Destination (Join-Path $stageRoot 'bin\yt-mux-host.exe') -Force
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'uninstall.ps1') -Destination (Join-Path $stageRoot 'uninstall.ps1') -Force
+    foreach ($script in @('uninstall.ps1', 'update.ps1')) {
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot $script) -Destination (Join-Path $stageRoot $script) -Force
+    }
     Get-ChildItem -LiteralPath $extensionSource -Force | Copy-Item -Destination (Join-Path $stageRoot 'extension') -Recurse -Force
 
     $videoFolder = [Environment]::GetFolderPath([Environment+SpecialFolder]::MyVideos)
@@ -277,10 +282,10 @@ try {
     Write-Host ''
     if ($isUpdate) {
         Write-Host 'yt-mux was updated successfully.' -ForegroundColor Green
-        Write-Host 'Restart the browser to load the updated extension.'
     } else {
         Write-Host 'yt-mux was installed successfully.' -ForegroundColor Green
-        Write-Host "Load this unpacked extension in the browser: $installedExtension"
+        Set-Clipboard -Value $installedExtension
+        Write-Host "Load this unpacked extension in the browser (path copied): $installedExtension"
     }
 } catch {
     $preserveSetup = $_.Exception.Data.Contains('PreserveSetup')

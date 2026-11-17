@@ -146,9 +146,11 @@ function Remove-InstalledFiles {
             }
         }
     }
-    $uninstaller = Join-Path $rootPath 'uninstall.ps1'
-    if (Test-Path -LiteralPath $uninstaller -PathType Leaf) {
-        Remove-Item -LiteralPath $uninstaller -Force
+    foreach ($script in @('update.ps1', 'uninstall.ps1')) {
+        $path = Join-Path $rootPath $script
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            Remove-Item -LiteralPath $path -Force
+        }
     }
     foreach ($directory in @($directories | Sort-Object Length -Descending)) {
         if (@(Get-ChildItem -LiteralPath $directory -Force).Count -eq 0) {
@@ -186,7 +188,7 @@ if ($registryPresent) {
     if ([string]::IsNullOrWhiteSpace($registryValue) -or (Test-PathUnderInstallRoot -Path $registryValue)) {
         $removeRegistry = $true
     } elseif ($looksLikeInstall) {
-        Write-Warning "Native messaging registry points to $registryValue, not this installation. Leaving the registry key in place."
+        Write-Warning "Another yt-mux installation at $(Split-Path -Parent (Split-Path -Parent $registryValue)) stays registered with the browser."
     }
 }
 
@@ -205,7 +207,8 @@ if (Test-Path -LiteralPath $installedHost -PathType Leaf) {
         )
         $hostProbe.Dispose()
     } catch {
-        throw 'The installed yt-mux host is in use. Close the browser and run uninstall again.'
+        Write-Host 'The installed yt-mux host is in use. Close the browser and run uninstall again.'
+        exit 1
     }
 }
 
@@ -224,11 +227,12 @@ if ($looksLikeInstall) {
     try {
         Remove-InstalledFiles -Root $resolvedInstallRoot
     } catch {
-        throw "Could not delete the yt-mux application files: $($_.Exception.Message)`nIf a file is in use, close the browser and run uninstall again."
+        Write-Host "Could not delete the yt-mux files. Close the browser and run uninstall again.`n$($_.Exception.Message)"
+        exit 1
     }
     Write-Host 'Removed the yt-mux application files.'
     if (Test-Path -LiteralPath $resolvedInstallRoot) {
-        Write-Host "Files remain in $resolvedInstallRoot."
+        Write-Host "Files you added remain in $resolvedInstallRoot."
     }
 }
 

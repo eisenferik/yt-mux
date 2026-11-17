@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "yt-mux",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Save the active YouTube video without re-encoding its streams.",
   "minimum_chrome_version": "116",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqTxQn9yp+xVry53hLnMBtlzeudhS5Cd2UMSzg6uIckr1dE4hJO66h/d4HHP2/2WpPx9fnE7kBx3RRRCzaukcEhoGUQP6LYvZT60WZmcR2AiLaBKPH+xtZNKa5XDSen2xM0wzOLJDHls9w3eq1OQjl+babl+pQYrhAMf6A3tePKDOqxVmHA1wKaml9nzO945EKUxOcBPvU//9mYI93z/s3U+T104pE8kqc++h9CQNFkz4zQBmJlT6YLgQBmpVQ+pizZEE2B+YNcOBsZKfZwwTmm6BDNk7fQQ2ZMBclBJonumBka7j9IBg8tfnZlMW5+mpgSuAGYugIJYPd49ua+V9HwIDAQAB",
@@ -9,7 +9,8 @@
     "activeTab",
     "nativeMessaging",
     "notifications",
-    "contextMenus"
+    "contextMenus",
+    "storage"
   ],
   "optional_permissions": ["cookies"],
   "optional_host_permissions": [

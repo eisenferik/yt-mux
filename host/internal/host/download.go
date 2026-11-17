@@ -74,6 +74,8 @@ func (r processResult) outcome(id string, outputTail *tail.Buffer) nativeRespons
 			return newError(id, ErrorKindYTDLPLoginRequired, "")
 		case ytdlp.FailureMembersOnly:
 			return newError(id, ErrorKindYTDLPMembersOnly, "")
+		case ytdlp.FailureOutdated:
+			return newError(id, ErrorKindYTDLPOutdated, "")
 		default:
 			return newError(id, ErrorKindYTDLPFailed, analysis.Diagnostic)
 		}

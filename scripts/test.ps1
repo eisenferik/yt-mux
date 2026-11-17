@@ -43,6 +43,7 @@ try {
 
 Write-Host 'Checking setup and release policy...'
 & (Join-Path $PSScriptRoot 'test-install.ps1')
+& (Join-Path $PSScriptRoot 'test-update.ps1')
 & (Join-Path $PSScriptRoot 'test-setup.ps1') -ExtensionRoot (Join-Path $repositoryRoot 'extension\dist')
 & (Join-Path $PSScriptRoot 'validate-release.ps1') -RepositoryRoot $repositoryRoot
 

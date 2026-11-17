@@ -24,6 +24,8 @@ const (
 	ErrorKindYTDLPFailed           ErrorKind = "YTDLP_FAILED"
 	ErrorKindYTDLPLoginRequired    ErrorKind = "YTDLP_LOGIN_REQUIRED"
 	ErrorKindYTDLPMembersOnly      ErrorKind = "YTDLP_MEMBERS_ONLY"
+	ErrorKindYTDLPOutdated         ErrorKind = "YTDLP_OUTDATED"
+	ErrorKindSavedFileMissing      ErrorKind = "SAVED_FILE_MISSING"
 )
 
 type header struct {
@@ -59,6 +61,15 @@ type settingsSetRequest struct {
 type destinationPickRequest struct {
 	header
 	Start string `json:"start,omitempty"`
+}
+
+type revealRequest struct {
+	header
+	Path string `json:"path"`
+}
+
+type updateRequest struct {
+	header
 }
 
 type nativeResponse interface {
@@ -106,6 +117,7 @@ type settingsMessage struct {
 	header
 	responseMarker
 	Settings config.Settings `json:"settings"`
+	Version  string          `json:"version"`
 }
 
 type settingsSavedMessage struct {
@@ -118,6 +130,11 @@ type destinationMessage struct {
 	header
 	responseMarker
 	Path string `json:"path"`
+}
+
+type launchedMessage struct {
+	header
+	responseMarker
 }
 
 func decodeEnvelope(raw json.RawMessage) (header, error) {

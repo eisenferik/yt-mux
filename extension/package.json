@@ -1,6 +1,6 @@
 {
   "name": "yt-mux-extension",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Chrome MV3 entry point for yt-mux",
   "type": "module",

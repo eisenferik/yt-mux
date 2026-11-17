@@ -88,6 +88,23 @@
         "type": "destination.pick",
         "id": "request1"
       }
+    },
+    {
+      "name": "reveal",
+      "message": {
+        "v": 1,
+        "type": "reveal",
+        "id": "request1",
+        "path": "D:\\Videos\\Channel\\clip.mkv"
+      }
+    },
+    {
+      "name": "update",
+      "message": {
+        "v": 1,
+        "type": "update",
+        "id": "request1"
+      }
     }
   ]
 }

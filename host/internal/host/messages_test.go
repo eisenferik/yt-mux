@@ -24,6 +24,10 @@ func requestTarget(t *testing.T, raw json.RawMessage) any {
 		return &startRequest{}
 	case "destination.pick":
 		return &destinationPickRequest{}
+	case "reveal":
+		return &revealRequest{}
+	case "update":
+		return &updateRequest{}
 	}
 	t.Fatalf("the fixture names a request the host does not handle: %q", head.Type)
 	return nil

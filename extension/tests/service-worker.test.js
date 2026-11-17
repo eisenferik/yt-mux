@@ -58,6 +58,60 @@ test("a finished download reports the saved file", async () => {
   assert.equal(lastNotification(state)?.message, "clip.mkv");
 });
 
+test("clicking the completion notification reveals the saved file and reports one that is gone", async () => {
+  const { state, listeners } = installChromeStub();
+  await loadServiceWorker();
+  listeners.action(videoTab());
+  const { port, id } = await startedDownload(state);
+  port.emitMessage({ v: 1, id, type: "done", path: "D:\\Videos\\Channel\\clip.mkv" });
+  await until(() => state.notifications.length === 1);
+
+  listeners.notificationClicked(lastNotification(state).id);
+  await until(() => state.ports.length === 2);
+  const reveal = sent(state.ports[1], "reveal");
+  assert.equal(reveal?.path, "D:\\Videos\\Channel\\clip.mkv");
+
+  state.ports[1].emitMessage({ v: 1, id: reveal.id, type: "error", kind: "SAVED_FILE_MISSING" });
+  await until(() => state.notifications.length === 2);
+  assert.equal(lastNotification(state).title, "File not found");
+});
+
+test("clicking a failure that an update fixes starts the update or points to the install command", async () => {
+  const { state, listeners } = installChromeStub();
+  await loadServiceWorker();
+  listeners.action(videoTab());
+  const { port, id } = await startedDownload(state);
+  port.emitMessage({ v: 1, id, type: "error", kind: "YTDLP_OUTDATED" });
+  await until(() => state.notifications.length === 1);
+
+  listeners.notificationClicked(lastNotification(state).id);
+  await until(() => state.ports.length === 2);
+  const update = sent(state.ports[1], "update");
+  assert.notEqual(update, undefined);
+
+  state.ports[1].emitMessage({ v: 1, id: update.id, type: "error", kind: "HOST_FAILURE" });
+  await until(() => state.notifications.length === 2);
+  assert.equal(lastNotification(state).message, "Run the yt-mux install command to update.");
+});
+
+test("an updated installation reloads the extension once the download ends", async () => {
+  const { state, listeners } = installChromeStub();
+  await loadServiceWorker();
+  listeners.action(videoTab());
+  const { port, id } = await requestedSettings(state);
+  port.emitMessage({ ...settingsReply(id), version: "99.0.0" });
+  await until(() => sent(port, "start") !== undefined);
+  assert.equal(state.reloads, 0);
+
+  port.emitMessage({ v: 1, id, type: "done", path: "D:\\Videos\\clip.mkv" });
+  await until(() => state.reloads === 1);
+  assert.equal(state.notifications.length, 0);
+
+  await loadServiceWorker();
+  await until(() => state.notifications.length === 1);
+  assert.equal(lastNotification(state).message, "clip.mkv");
+});
+
 test("a previous download cannot clear the next badge early", async (t) => {
   const { state, listeners } = installChromeStub();
   await loadServiceWorker();

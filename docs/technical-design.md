@@ -42,8 +42,9 @@ The extension has no popup and no content script.
 
 The host runs nothing the extension supplies. The extension names a preset;
 the host itself holds what each preset passes to `yt-dlp`, and finds the
-runtimes beside its own executable. The host creates the executable directly
-and never starts a shell.
+runtimes beside its own executable. The host creates each executable directly.
+The only script it starts is the installed update script, and nothing from the
+extension reaches it.
 
 A URL is accepted only as a YouTube address that names a single video.
 
@@ -113,8 +114,7 @@ registers `HKCU\Software\Google\Chrome\NativeMessagingHosts\io.yt_mux.host`.
 Administrator rights are never required.
 
 An update will not begin while the host is running. It preserves
-`settings.json`. The extension keeps its path, so the browser does not need to
-load it again. Its identity comes from the manifest key.
+`settings.json`. The extension's identity comes from the manifest key.
 
 Uninstall deletes the files yt-mux installed, out of a directory it has
 identified as a yt-mux installation, and nothing else. Videos and anything

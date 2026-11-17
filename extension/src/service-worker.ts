@@ -1,6 +1,7 @@
 import type { CookieAccess } from "./permissions.js";
 import { collectCookies, CookieCollection } from "./cookie-collection.js";
 import { createCookieState } from "./cookie-state.js";
+import { sendNative } from "./native.js";
 import { handleSettingsSaves } from "./settings-save.js";
 import {
   badgeClearDelay,
@@ -19,6 +20,7 @@ import {
 } from "./presentation.js";
 import {
   ErrorKind,
+  EXTENSION_VERSION,
   NATIVE_HOST,
   NativeMessage,
   postRequest,
@@ -55,6 +57,16 @@ type TerminalOutcome =
   | { type: "disconnected"; detail: string | undefined }
   | { type: "cancelled-before-start" };
 
+type NotificationAction = { type: "reveal"; path: string } | { type: "update" };
+
+interface Notice {
+  title: string;
+  message: string;
+  id?: string;
+}
+
+const pendingNoticeKey = "pending-notice";
+
 interface TabClaim {
   tabID: number;
   url: string;
@@ -62,10 +74,17 @@ interface TabClaim {
 }
 
 const sessions = new Map<number, Session>();
+let installedVersionDiffers = false;
 const badgeClearTimers = new Map<number, ReturnType<typeof setTimeout>>();
 handleSettingsSaves(createCookieState());
 
 chrome.runtime.onInstalled.addListener(() => createContextMenus());
+
+chrome.runtime.onStartup.addListener(() => {
+  void chrome.storage.local.clear();
+});
+
+void showPendingNotice();
 
 chrome.action.onClicked.addListener((tab) => {
   if (tab.id !== undefined) {
@@ -76,6 +95,10 @@ chrome.action.onClicked.addListener((tab) => {
     }
   }
   void downloadTab(tab);
+});
+
+chrome.notifications.onClicked.addListener((notificationID) => {
+  void runNotificationAction(notificationID);
 });
 
 chrome.commands.onCommand.addListener(() => {
@@ -162,6 +185,7 @@ async function downloadTab(tab: chrome.tabs.Tab, requestedPreset?: PresetName): 
 async function handleNativeMessage(session: Session, message: NativeMessage): Promise<void> {
   switch (message.type) {
     case "settings": {
+      installedVersionDiffers ||= message.version !== EXTENSION_VERSION;
       await requestStart(session, message.settings);
       return;
     }
@@ -231,11 +255,13 @@ async function finishSession(session: Session, outcome: TerminalOutcome): Promis
     session.port.disconnect();
   }
 
+  let notice: Notice | undefined;
   switch (outcome.type) {
     case "completed":
       await showDoneBadge(session.tabID);
       if (settings?.notifications !== false) {
-        notify("Download complete", filenameFromPath(outcome.path));
+        await chrome.storage.local.set({ [session.id]: { type: "reveal", path: outcome.path } });
+        notice = { title: "Download complete", message: filenameFromPath(outcome.path), id: session.id };
       }
       break;
     case "host-error": {
@@ -249,16 +275,70 @@ async function finishSession(session: Session, outcome: TerminalOutcome): Promis
         cookieAccess: session.cookieAccess,
         kind: outcome.errorKind,
       });
-      notify("Download failed", outcome.detail ? `${base}\n${outcome.detail}` : base);
+      if (outcome.errorKind === "YTDLP_OUTDATED") {
+        await chrome.storage.local.set({ [session.id]: { type: "update" } });
+        notice = { title: "Download failed", message: base, id: session.id };
+        break;
+      }
+      notice = { title: "Download failed", message: outcome.detail ? `${base}\n${outcome.detail}` : base };
       break;
     }
     case "disconnected":
       await showFailedBadge(session.tabID);
-      notify("Download failed", disconnectDetail(outcome.detail));
+      notice = { title: "Download failed", message: disconnectDetail(outcome.detail) };
       break;
     case "cancelled-before-start":
       await clearBadge(session.tabID);
       break;
+  }
+  // The browser keeps running the old worker after an update until it is reloaded.
+  if (!installedVersionDiffers || sessions.size > 0) {
+    if (notice !== undefined) {
+      notify(notice.title, notice.message, notice.id);
+    }
+    return;
+  }
+  // Reloading discards a notification created just before it, so the reloaded worker shows it.
+  if (notice !== undefined) {
+    await chrome.storage.local.set({ [pendingNoticeKey]: notice });
+  }
+  chrome.runtime.reload();
+}
+
+async function showPendingNotice(): Promise<void> {
+  const stored: Record<string, Notice | undefined> = await chrome.storage.local.get(pendingNoticeKey);
+  const notice = stored[pendingNoticeKey];
+  if (notice !== undefined) {
+    await chrome.storage.local.remove(pendingNoticeKey);
+    notify(notice.title, notice.message, notice.id);
+  }
+}
+
+async function runNotificationAction(notificationID: string): Promise<void> {
+  const stored: Record<string, NotificationAction | undefined> = await chrome.storage.local.get(notificationID);
+  const action = stored[notificationID];
+  if (action === undefined) {
+    return;
+  }
+  const id = requestID();
+  const result = await sendNative(
+    action.type === "reveal"
+      ? { v: PROTOCOL_VERSION, type: "reveal", id, path: action.path }
+      : { v: PROTOCOL_VERSION, type: "update", id },
+  );
+  if (action.type === "update") {
+    if (result.type === "disconnected" || result.message.type === "error") {
+      notify("Update not started", "Run the yt-mux install command to update.");
+    }
+    return;
+  }
+  if (result.type === "disconnected") {
+    notify("Folder not opened", result.detail);
+  } else if (result.message.type === "error" && result.message.kind !== "CANCELLED") {
+    notify(
+      result.message.kind === "SAVED_FILE_MISSING" ? "File not found" : "Folder not opened",
+      errorDetail({ settings: undefined, cookieAccess: "denied", kind: result.message.kind }),
+    );
   }
 }
 

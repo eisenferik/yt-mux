@@ -1,5 +1,6 @@
 export const NATIVE_HOST = "io.yt_mux.host";
 export const PROTOCOL_VERSION = 1 as const;
+export const EXTENSION_VERSION = "0.3.0";
 
 export const PRESET_NAMES = ["archive", "archive-vp9", "compat-mp4"] as const;
 export type PresetName = (typeof PRESET_NAMES)[number];
@@ -15,6 +16,8 @@ export const ERROR_KINDS = [
   "YTDLP_FAILED",
   "YTDLP_LOGIN_REQUIRED",
   "YTDLP_MEMBERS_ONLY",
+  "YTDLP_OUTDATED",
+  "SAVED_FILE_MISSING",
 ] as const;
 export type ErrorKind = (typeof ERROR_KINDS)[number];
 
@@ -67,6 +70,7 @@ interface ErrorMessage extends NativeMessageBase {
 
 interface SettingsMessage extends NativeMessageBase {
   type: "settings";
+  version: string;
   settings: Settings;
 }
 
@@ -80,6 +84,10 @@ interface DestinationMessage extends NativeMessageBase {
   path: string;
 }
 
+interface LaunchedMessage extends NativeMessageBase {
+  type: "launched";
+}
+
 export type NativeMessage =
   | AcceptedMessage
   | ProgressMessage
@@ -88,7 +96,8 @@ export type NativeMessage =
   | ErrorMessage
   | SettingsMessage
   | SettingsSavedMessage
-  | DestinationMessage;
+  | DestinationMessage
+  | LaunchedMessage;
 
 interface NativeRequestBase {
   v: typeof PROTOCOL_VERSION;
@@ -120,12 +129,23 @@ interface DestinationPickRequest extends NativeRequestBase {
   start?: string;
 }
 
+interface RevealRequest extends NativeRequestBase {
+  type: "reveal";
+  path: string;
+}
+
+interface UpdateRequest extends NativeRequestBase {
+  type: "update";
+}
+
 export type NativeRequest =
   | StartRequest
   | CancelRequest
   | SettingsGetRequest
   | SettingsSetRequest
-  | DestinationPickRequest;
+  | DestinationPickRequest
+  | RevealRequest
+  | UpdateRequest;
 
 export function postRequest(port: chrome.runtime.Port, request: NativeRequest): void {
   port.postMessage(request);

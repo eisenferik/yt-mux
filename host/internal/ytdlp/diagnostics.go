@@ -8,6 +8,7 @@ const (
 	FailureOther FailureReason = iota
 	FailureLoginRequired
 	FailureMembersOnly
+	FailureOutdated
 )
 
 type FailureAnalysis struct {
@@ -17,7 +18,30 @@ type FailureAnalysis struct {
 
 func AnalyzeFailure(lines []string) FailureAnalysis {
 	diagnostic := diagnosticLine(lines)
-	return FailureAnalysis{Reason: failureReason(diagnostic), Diagnostic: diagnostic}
+	reason := failureReason(diagnostic)
+	if reason == FailureOther && outdated(diagnostic, lines) {
+		reason = FailureOutdated
+	}
+	return FailureAnalysis{Reason: reason, Diagnostic: diagnostic}
+}
+
+// yt-dlp asks for an update only on extraction failures it did not expect.
+// A broken signature or n challenge only warns, and the formats it drops can
+// leave nothing the preset selects.
+func outdated(diagnostic string, lines []string) bool {
+	if strings.Contains(diagnostic, "Confirm you are on the latest version") {
+		return true
+	}
+	if !strings.Contains(diagnostic, "Requested format is not available") {
+		return false
+	}
+	for _, line := range lines {
+		if strings.HasPrefix(line, "WARNING: [youtube]") &&
+			(strings.Contains(line, "Signature solving failed") || strings.Contains(line, "n challenge solving failed")) {
+			return true
+		}
+	}
+	return false
 }
 
 func diagnosticLine(lines []string) string {

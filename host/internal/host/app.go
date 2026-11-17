@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -20,6 +21,8 @@ type App struct {
 	reader       *protocol.Reader
 	writer       *protocol.Writer
 	log          io.Writer
+	installRoot  string
+	launch       func(*exec.Cmd) error
 }
 
 type readResult struct {
@@ -59,6 +62,8 @@ func New(installRoot string, input io.Reader, output, logOutput io.Writer) *App 
 		reader:       protocol.NewReader(input),
 		writer:       protocol.NewWriter(output),
 		log:          logOutput,
+		installRoot:  installRoot,
+		launch:       startDetached,
 	}
 	if err := cookies.CleanupStale(app.temporaryDir, time.Now()); err != nil {
 		fmt.Fprintf(app.log, "warning: stale cookie cleanup failed: %v\n", err)

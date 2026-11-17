@@ -59,8 +59,8 @@ async function setBadge(tabID: number, text: string, color: string): Promise<voi
   }
 }
 
-export function notify(title: string, message: string): void {
-  void chrome.notifications.create({
+export function notify(title: string, message: string, notificationID = ""): void {
+  void chrome.notifications.create(notificationID, {
     type: "basic",
     iconUrl: "icons/icon128.png",
     title,
@@ -70,7 +70,7 @@ export function notify(title: string, message: string): void {
 
 export function disconnectDetail(lastError: string | undefined): string {
   if (lastError !== undefined && setupFixableHostErrors.includes(lastError)) {
-    return "Run the yt-mux setup script.";
+    return "Run the yt-mux install command again.";
   }
   return lastError ?? "The native host disconnected unexpectedly.";
 }
@@ -103,14 +103,18 @@ export function errorDetail({ settings, cookieAccess, kind }: ErrorDetailContext
         return cookieAccessOffMessage;
       }
       return "This video is for channel members. Sign in to YouTube with a member account.";
+    case "YTDLP_OUTDATED":
+      return "This version no longer works with YouTube. Click to update.";
     case "YTDLP_FAILED":
       return "yt-dlp could not download this video.";
     case "PROCESS_START_FAILED":
-      return "A required dependency is missing. Run setup again.";
+      return "A required dependency is missing. Run the yt-mux install command again.";
     case "COOKIE_FILE_FAILED":
       return "The temporary authentication file could not be created.";
     case "MISSING_OUTPUT_PATH":
       return "The download finished without reporting a saved file.";
+    case "SAVED_FILE_MISSING":
+      return "It was moved or deleted.";
     case "INVALID_REQUEST":
     case "HOST_FAILURE":
     case "DESTINATION_PICK_FAILED":

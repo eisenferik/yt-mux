@@ -3,6 +3,8 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 
 	"github.com/eisenferik/yt-mux/host/internal/config"
 	"github.com/eisenferik/yt-mux/host/internal/folderpick"
@@ -30,7 +32,11 @@ func (a *App) handleRequest(raw json.RawMessage, active *operation) requestOutco
 		if err != nil {
 			return fatalHostFailureOutcome(request.ID, err)
 		}
-		return requestOutcome{reply: settingsMessage{header: newHeader("settings", request.ID), Settings: settings}}
+		return requestOutcome{reply: settingsMessage{
+			header:   newHeader("settings", request.ID),
+			Settings: settings,
+			Version:  installedVersion(a.installRoot),
+		}}
 
 	case "settings.set":
 		var request settingsSetRequest
@@ -67,6 +73,29 @@ func (a *App) handleRequest(raw json.RawMessage, active *operation) requestOutco
 			return requestOutcome{reply: newError(request.ID, ErrorKindDestinationPickFailed, "")}
 		}
 		return requestOutcome{reply: destinationMessage{header: newHeader("destination", request.ID), Path: path}}
+
+	case "reveal":
+		var request revealRequest
+		if err := decodeStrict(raw, &request); err != nil {
+			return fatalInvalidRequestOutcome(envelope.ID, err)
+		}
+		if _, err := os.Stat(request.Path); err != nil {
+			return requestOutcome{reply: newError(request.ID, ErrorKindSavedFileMissing, "")}
+		}
+		if err := a.launch(explorerCommand(request.Path)); err != nil {
+			return fatalHostFailureOutcome(request.ID, err)
+		}
+		return requestOutcome{reply: launchedMessage{header: newHeader("launched", request.ID)}}
+
+	case "update":
+		var request updateRequest
+		if err := decodeStrict(raw, &request); err != nil {
+			return fatalInvalidRequestOutcome(envelope.ID, err)
+		}
+		if err := a.launch(updateCommand(a.installRoot)); err != nil {
+			return fatalHostFailureOutcome(request.ID, err)
+		}
+		return requestOutcome{reply: launchedMessage{header: newHeader("launched", request.ID)}}
 
 	case "start":
 		var request startRequest
@@ -114,4 +143,15 @@ func fatalHostFailureOutcome(id string, err error) requestOutcome {
 		reply: newError(id, ErrorKindHostFailure, ""),
 		fatal: err,
 	}
+}
+
+func installedVersion(installRoot string) string {
+	var manifest struct {
+		Version string `json:"version"`
+	}
+	payload, err := os.ReadFile(filepath.Join(installRoot, "extension", "manifest.json"))
+	if err != nil || json.Unmarshal(payload, &manifest) != nil {
+		return ""
+	}
+	return manifest.Version
 }

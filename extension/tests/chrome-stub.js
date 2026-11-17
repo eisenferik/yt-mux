@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach } from "node:test";
+import { EXTENSION_VERSION } from "../dist/protocol.js";
 
 const serviceWorkerURL = new URL("../dist/service-worker.js", import.meta.url);
 const optionsURL = new URL("../dist/options.js", import.meta.url);
@@ -65,6 +66,8 @@ export function installChromeStub() {
     pendingPermission: null,
     badgeGate: null,
     cookies: [],
+    storage: {},
+    reloads: 0,
   };
   const listeners = {};
   currentListeners = listeners;
@@ -81,7 +84,11 @@ export function installChromeStub() {
   globalThis.chrome = {
     runtime: {
       lastError: undefined,
+      reload() {
+        state.reloads += 1;
+      },
       onInstalled: event("installed"),
+      onStartup: event("startup"),
       onConnect: event("connect"),
       connect({ name }) {
         const endpoints = [0, 1].map(() => ({ messages: [], disconnects: [] }));
@@ -144,9 +151,26 @@ export function installChromeStub() {
     commands: { onCommand: event("command") },
     contextMenus: { onClicked: event("menu") },
     notifications: {
-      create(options) {
-        state.notifications.push(options);
-        return Promise.resolve("notification");
+      onClicked: event("notificationClicked"),
+      create(id, options) {
+        const created = id || `notification${state.notifications.length}`;
+        state.notifications.push({ id: created, ...options });
+        return Promise.resolve(created);
+      },
+    },
+    storage: {
+      local: {
+        get(key) {
+          return Promise.resolve(key in state.storage ? { [key]: state.storage[key] } : {});
+        },
+        set(items) {
+          Object.assign(state.storage, items);
+          return Promise.resolve();
+        },
+        remove(key) {
+          delete state.storage[key];
+          return Promise.resolve();
+        },
       },
     },
     permissions: {
@@ -248,6 +272,7 @@ export const settingsReply = (id, overrides = {}) => ({
   v: 1,
   id,
   type: "settings",
+  version: EXTENSION_VERSION,
   settings: {
     destination: "D:\\Videos",
     defaultPreset: "archive",

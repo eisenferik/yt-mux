@@ -41,7 +41,7 @@ try {
     $uninstallMarkerText = "$hostName uninstall in progress"
     $dependencies = Get-Content -LiteralPath (Join-Path $repositoryRoot 'setup\dependencies.json') -Raw | ConvertFrom-Json
     $installedFiles = @(
-        'uninstall.ps1', 'bin\yt-mux-host.exe', 'bin\yt-dlp.exe', 'bin\ffmpeg.exe', 'bin\ffprobe.exe', 'bin\deno.exe',
+        'uninstall.ps1', 'update.ps1', 'bin\yt-mux-host.exe', 'bin\yt-dlp.exe', 'bin\ffmpeg.exe', 'bin\ffprobe.exe', 'bin\deno.exe',
         'config\settings.json', 'config\settings-123456.tmp',
         'native\io.yt_mux.host.json', 'tmp\cookies-0123456789abcdef0123456789abcdef.txt'
     )
